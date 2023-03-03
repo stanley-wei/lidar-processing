@@ -1,13 +1,15 @@
 from scipy import interpolate
 import numpy as np
 
-def roundMultiple(to_round, round_resolution):
+import iostream
+
+def get_rounded_multiple(to_round, round_resolution):
     if to_round % round_resolution > round_resolution / 2:
         return (int(to_round / round_resolution) + 1) 
     else:
         return int(to_round / round_resolution) 
 
-def findCoordsMinMax(point_array):
+def find_coords_min_max(point_array):
     min_x = round(point_array[0][0], 2)
     max_x = round(point_array[0][0], 2)
 
@@ -39,21 +41,24 @@ def findCoordsMinMax(point_array):
 
     return max_x, min_x, max_y, min_y, max_z, min_z;
 
-def pointCloudToGrid(pointCloud, resolution, resolution_z, mins = []):
-    if(len(mins) == 0):
-        max_x, min_x, max_y, min_y, max_z, min_z = findCoordsMinMax(pointCloud)
+def point_cloud_to_grid(pointCloud, resolution, resolution_z, min_maxes = []):
+    if(len(min_maxes) == 0):
+        max_x, min_x, max_y, min_y, max_z, min_z = find_coords_min_max(pointCloud)
     else:
-        min_x = mins[0]
-        min_y = mins[1]
+        min_x = min_maxes[0];
+        max_x = min_maxes[1];
+        min_y = min_maxes[2];
+        max_y = min_maxes[3];
+
 
     arr = np.zeros([int((max_y - min_y) / resolution) + 2, int((max_x - min_x) / resolution) + 2])
 
     for i in range(pointCloud.shape[0]):
-        arr[roundMultiple(pointCloud[i][1] - min_y, resolution)][roundMultiple(pointCloud[i][0] - min_x, resolution)] = roundMultiple(pointCloud[i][2], resolution_z) * resolution_z;
+        arr[get_rounded_multiple(pointCloud[i][1] - min_y, resolution)][get_rounded_multiple(pointCloud[i][0] - min_x, resolution)] = get_rounded_multiple(pointCloud[i][2], resolution_z) * resolution_z;
 
     return arr;
 
-def interpolateHoles(point_array):
+def interpolate_holes(point_array):
     nonzeros = np.nonzero(point_array)
     zeros = np.argwhere(point_array == 0);
     fills = interpolate.griddata(nonzeros, point_array[nonzeros], zeros);
@@ -63,7 +68,7 @@ def interpolateHoles(point_array):
 
     return point_array
 
-def createWalls(point_array, step = 1, resolution = 1):
+def create_walls(point_array, step = 1.0, resolution = 1.0):
     file = open("Output/output3.txt", 'w')
 
     for i in range(1, point_array.shape[0] - 1):
@@ -98,8 +103,7 @@ def createWalls(point_array, step = 1, resolution = 1):
 
             if(maxZ - point_array[i][j] > max(step, resolution)):
                 for k in range(int(point_array[i][j]) + 1, int(maxZ), step):
-                    file.write("%f, %f, %f \n" % (j_index * resolution, i_index * resolution, k))
+                    file.write("%f %f %f \n" % (j_index * resolution, i_index * resolution, k))
 
     file.close()
-
-    return point_array
+    iostream.write_to_file(point_array, "output3.txt", resolution, 'a')
