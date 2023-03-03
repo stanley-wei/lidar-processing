@@ -6,3 +6,5 @@ _pycache_/*
 
 *.cfg
 *.pyc
+
+.DS_Store

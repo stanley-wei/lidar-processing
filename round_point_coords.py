@@ -1,26 +1,11 @@
-import shutil
-import cv2
 import numpy as np
 from scipy import ndimage
-import sys
-
-import queue
 
 from utils import *
+import iostream
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        file_name = sys.argv[1]
-    else:
-        file_name = input("File name: ")
-
-    file = open(file_name, 'r')
-    count = sum(1 for _ in file)
-    file.close()
-
-    arr = np.loadtxt(file_name, delimiter=",", dtype=float)
-    arr.reshape(count, -1)
-    arr = np.delete(arr, list(range(3, arr.shape[1])), axis = 1)
+    arr = iostream.readInFile();
 
     resolution = 4.0
     resolution_z = 1

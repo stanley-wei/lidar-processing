@@ -1,3 +1,6 @@
+from scipy import interpolate
+import numpy as np
+
 def roundMultiple(to_round, round_resolution):
     if to_round % round_resolution > round_resolution / 2:
         return (int(to_round / round_resolution) + 1) 
@@ -36,56 +39,27 @@ def findCoordsMinMax(point_array):
 
     return max_x, min_x, max_y, min_y, max_z, min_z;
 
-def writeToFile(point_array, file_name = "output.txt", resolution = 1.0, edit_type = 'w'):
-    file = open("Output/" + file_name, edit_type);
+def pointCloudToGrid(pointCloud, resolution, resolution_z, mins = []):
+    if(len(mins) == 0):
+        max_x, min_x, max_y, min_y, max_z, min_z = findCoordsMinMax(pointCloud)
+    else:
+        min_x = mins[0]
+        min_y = mins[1]
 
-    for i in range(point_array.shape[0]):
-        for j in range(point_array.shape[1]):
-            if point_array[i][j] != 0:
-                file.write("%f, %f, %f \n" % (j * resolution, i * resolution, point_array[i][j]))
-    file.close();
+    arr = np.zeros([int((max_y - min_y) / resolution) + 2, int((max_x - min_x) / resolution) + 2])
 
-    return file_name;
+    for i in range(pointCloud.shape[0]):
+        arr[roundMultiple(pointCloud[i][1] - min_y, resolution)][roundMultiple(pointCloud[i][0] - min_x, resolution)] = roundMultiple(pointCloud[i][2], resolution_z) * resolution_z;
 
-def fillHoles(point_array, numIterations = 1):
-    for i in range(1, point_array.shape[0] - 1):
-        for j in range(1, point_array.shape[1] - 1):
-            counter = 0
-            numNums = 0
-            if(point_array[i][j] == 0):
-                if(point_array[i+1][j] == 0):
-                    counter += point_array[i+1][j]
-                    if(point_array[i+1][j] > 0):
-                        numNums += 1
-                else:
-                    continue;
+    return arr;
 
-                if(point_array[i-1][j] == 0 or counter == 0 or abs(point_array[i-1][j] - counter/numNums) <= 10):
-                    counter += point_array[i-1][j]
-                    if(point_array[i-1][j] > 0):
-                        numNums += 1
-                else:
-                    continue;
+def interpolateHoles(point_array):
+    nonzeros = np.nonzero(point_array)
+    zeros = np.argwhere(point_array == 0);
+    fills = interpolate.griddata(nonzeros, point_array[nonzeros], zeros);
 
-                if(point_array[i][j-1] == 0 or counter == 0 or abs(point_array[i][j-1] - counter/numNums) <= 10):
-                    counter += point_array[i][j-1]
-                    if(point_array[i][j-1] > 0):
-                        numNums += 1
-                else:
-                    continue;
-
-                if(point_array[i][j+1] == 0 or counter == 0 or abs(point_array[i][j+1] - counter/numNums) <= 10):
-                    counter += point_array[i][j+1]
-                    if(point_array[i][j+1] > 0):
-                        numNums += 1
-                else:
-                    continue;
-
-                if numNums > 0:
-                    point_array[i][j] = counter / numNums;
-
-    if(numIterations > 1):
-        point_array = fillHoles(point_array, numIterations - 1);
+    for i in range(fills.shape[0]):
+        point_array[zeros[i][0]][zeros[i][1]] = fills[i];
 
     return point_array
 
@@ -128,4 +102,4 @@ def createWalls(point_array, step = 1, resolution = 1):
 
     file.close()
 
-    writeToFile(point_array, "output3.txt", resolution, 'a')
+    return point_array
