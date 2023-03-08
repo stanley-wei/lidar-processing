@@ -21,5 +21,9 @@ if __name__ == "__main__":
         for j in range(pruned_array.shape[1]):
             if(pruned_array[i][j] == 0):
                 pruned_array[i][j] = ground_array[i][j];
+        
+    pruned_cloud = utils.grid_to_point_cloud(pruned_array, resolution);
 
-    utils.create_walls(pruned_array, resolution_z, resolution);
+    wall_cloud = utils.create_walls(pruned_cloud, pruned_array, resolution_z, resolution);
+
+    iostream.write_to_file(wall_cloud);
