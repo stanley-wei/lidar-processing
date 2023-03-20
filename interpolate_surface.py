@@ -18,7 +18,7 @@ if __name__ == "__main__":
     pruned_points = np.delete(pruned_points, to_delete, axis = 0)
 
     resolution = 4;
-    resolution_z = 1;
+    resolution_z = 0.5;
 
     max_x, min_x, max_y, min_y, max_z, min_z = utils.find_coords_min_max(ground_points)
 
@@ -67,5 +67,14 @@ if __name__ == "__main__":
     pruned_cloud = utils.grid_to_point_cloud(pruned_array, resolution);
 
     wall_cloud = utils.create_walls(pruned_cloud, pruned_array, resolution_z, resolution);
+
+    to_delete = []
+    for i in range(wall_cloud.shape[0]):
+        if(wall_cloud[i][2] == 0):
+            to_delete.append(i)
+
+    wall_cloud = np.delete(wall_cloud, to_delete, axis = 0)
+
+    wall_cloud = utils.create_base(wall_cloud, pruned_array, resolution, min_z - (min_z % 5))
 
     iostream.write_to_file(wall_cloud, "output.txt");

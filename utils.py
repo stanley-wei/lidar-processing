@@ -56,7 +56,11 @@ def point_cloud_to_grid(point_cloud, resolution, resolution_z, min_maxes = []):
     arr = np.zeros([int((max_y - min_y) / resolution) + 2, int((max_x - min_x) / resolution) + 2])
 
     for i in range(point_cloud.shape[0]):
-        arr[get_rounded_multiple(point_cloud[i][1] - min_y, resolution)][get_rounded_multiple(point_cloud[i][0] - min_x, resolution)] = get_rounded_multiple(point_cloud[i][2], resolution_z) * resolution_z;
+        x = get_rounded_multiple(point_cloud[i][1] - min_y, resolution)
+        y = get_rounded_multiple(point_cloud[i][0] - min_x, resolution)
+        z = point_cloud[i][2]
+        if(z > arr[x][y]):
+            arr[x][y] = z;
 
     return arr;
 
@@ -114,4 +118,14 @@ def create_walls(point_cloud, point_grid, step = 1.0, resolution = 1.0):
             # while(minZ < point_grid[i][j] - z_step):
             #     wall_cloud = np.append(wall_cloud, [[i * resolution, j * resolution, minZ]], axis = 0)
             #     minZ += z_step;
+
+    return wall_cloud
+
+def create_base(point_cloud, point_grid, resolution = 1.0, floor_z = 0):
+    wall_cloud = point_cloud;
+    for j in range(0, point_grid.shape[1]):
+        wall_cloud = np.append(wall_cloud, [[0, j * resolution, floor_z], [(point_grid.shape[0]-1) * resolution, j * resolution, floor_z]], axis = 0)
+    
+    for i in range(0, point_grid.shape[0]):
+        wall_cloud = np.append(wall_cloud, [[i * resolution, 0, floor_z], [i * resolution, (point_grid.shape[1]-1) * resolution, floor_z]], axis = 0)
     return wall_cloud;
