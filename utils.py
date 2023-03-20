@@ -72,13 +72,34 @@ def grid_to_point_cloud(point_grid, resolution):
             point_cloud[index][2] = point_grid[i][j];
     return point_cloud;
 
-def interpolate_holes(point_array):
+def dilate(arr, to_dilate = 1, dilated = None, i = 0, j = 0):
+    if(dilated == None):
+        dilated = np.empty(shape = (0, 2), dtype = int);
+
+    if(arr[i][j] == to_dilate):
+        if(arr[i+1][j] == 0):
+            arr[i+1][j] = to_dilate;
+            dilated = np.append(dilated, [i+1, j]);
+
+        if(arr[i][j+1] == 0):
+            arr[i][j+1] = to_dilate;
+            dilated = np.append(dilated, [i, j+1]);
+
+    if(i < arr.shape[0]):
+        dilate(arr, dilated, i+1, j);
+
+    if(j < arr.shape[1]):
+        dilate(arr, to_dilate, dilated, i, j+1);
+
+def interpolate_holes(point_array, to_interpolate = None):
     nonzeros = np.nonzero(point_array)
-    zeros = np.argwhere(point_array == 0);
-    fills = interpolate.griddata(nonzeros, point_array[nonzeros], zeros);
+    if to_interpolate == None:
+        to_interpolate = np.argwhere(point_array == 0);
+    
+    fills = interpolate.griddata(nonzeros, point_array[nonzeros], to_interpolate);
 
     for i in range(fills.shape[0]):
-        point_array[zeros[i][0]][zeros[i][1]] = fills[i];
+        point_array[to_interpolate[i][0]][to_interpolate[i][1]] = fills[i];
 
     return point_array
 
@@ -88,8 +109,9 @@ def create_walls(point_cloud, point_grid, step = 1.0, resolution = 1.0):
     for i in range(1, point_grid.shape[0] - 1):
         for j in range(1, point_grid.shape[1] - 1):
             minZ = min((point_grid[i-1][j], point_grid[i+1][j], point_grid[i][j-1], point_grid[i][j+1]));
-            while(minZ < point_grid[i][j] - z_step):
+            if(minZ < point_grid[i][j] - z_step):
                 wall_cloud = np.append(wall_cloud, [[i * resolution, j * resolution, minZ]], axis = 0)
-                minZ += z_step;
-
+            # while(minZ < point_grid[i][j] - z_step):
+            #     wall_cloud = np.append(wall_cloud, [[i * resolution, j * resolution, minZ]], axis = 0)
+            #     minZ += z_step;
     return wall_cloud;
