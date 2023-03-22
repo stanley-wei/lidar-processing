@@ -20,6 +20,8 @@ if __name__ == "__main__":
     resolution = 4;
     resolution_z = 0.5;
 
+    base_height = 5;
+
     max_x, min_x, max_y, min_y, max_z, min_z = utils.find_coords_min_max(ground_points)
 
     # orig_array = utils.point_cloud_to_grid(orig_points, resolution, resolution_z, [min_x, min_y]);
@@ -75,6 +77,6 @@ if __name__ == "__main__":
 
     wall_cloud = np.delete(wall_cloud, to_delete, axis = 0)
 
-    wall_cloud = utils.create_base(wall_cloud, pruned_array, resolution, min_z - (min_z % 5))
+    wall_cloud = utils.create_base(wall_cloud, pruned_array, resolution, min_z - base_height)
 
     iostream.write_to_file(wall_cloud, "output.txt");

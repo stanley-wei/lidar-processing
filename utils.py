@@ -7,9 +7,9 @@ import iostream
 
 def get_rounded_multiple(to_round, round_resolution):
     if to_round % round_resolution > round_resolution / 2:
-        return (int(to_round / round_resolution) + 1) 
+        return int(to_round / round_resolution) + 1 if to_round > 0 else int(to_round / round_resolution)
     else:
-        return int(to_round / round_resolution) 
+        return int(to_round / round_resolution) if to_round >= 0 else int(to_round / round_resolution) - 1
 
 def find_coords_min_max(point_array):
     min_x = round(point_array[0][0], 2)
@@ -53,14 +53,14 @@ def point_cloud_to_grid(point_cloud, resolution, resolution_z, min_maxes = []):
         max_y = min_maxes[3];
 
 
-    arr = np.zeros([int((max_y - min_y) / resolution) + 2, int((max_x - min_x) / resolution) + 2])
+    arr = np.zeros([int(abs(max_y - min_y) / resolution) + 2, int(abs(max_x - min_x) / resolution) + 2])
 
     for i in range(point_cloud.shape[0]):
-        x = get_rounded_multiple(point_cloud[i][1] - min_y, resolution)
-        y = get_rounded_multiple(point_cloud[i][0] - min_x, resolution)
+        x = get_rounded_multiple(point_cloud[i][0] - min_x, resolution)
+        y = get_rounded_multiple(point_cloud[i][1] - min_y, resolution)
         z = point_cloud[i][2]
-        if(z > arr[x][y]):
-            arr[x][y] = z;
+        if(z > arr[y][x]):
+            arr[y][x] = z;
 
     return arr;
 
@@ -71,8 +71,8 @@ def grid_to_point_cloud(point_grid, resolution):
             if math.isnan(point_grid[i][j]):
                 continue;
             index = i * point_grid.shape[1] + j
-            point_cloud[index][0] = i * resolution;
-            point_cloud[index][1] = j * resolution;
+            point_cloud[index][0] = j * resolution;
+            point_cloud[index][1] = i * resolution;
             point_cloud[index][2] = point_grid[i][j];
     return point_cloud;
 
@@ -112,9 +112,9 @@ def create_walls(point_cloud, point_grid, step = 1.0, resolution = 1.0):
     wall_cloud = point_cloud;
     for i in range(1, point_grid.shape[0] - 1):
         for j in range(1, point_grid.shape[1] - 1):
-            minZ = min((point_grid[i-1][j], point_grid[i+1][j], point_grid[i][j-1], point_grid[i][j+1]));
-            if(minZ < point_grid[i][j] - z_step):
-                wall_cloud = np.append(wall_cloud, [[i * resolution, j * resolution, minZ]], axis = 0)
+            minZ, d_i, d_j = get_min_surrounding(point_grid, i, j)
+            if(minZ < point_grid[i][j] - z_step and minZ != -1):
+                wall_cloud = np.append(wall_cloud, [[j * resolution + 0.01 * d_j, i * resolution + 0.01 * d_i, minZ]], axis = 0)
             # while(minZ < point_grid[i][j] - z_step):
             #     wall_cloud = np.append(wall_cloud, [[i * resolution, j * resolution, minZ]], axis = 0)
             #     minZ += z_step;
@@ -123,9 +123,35 @@ def create_walls(point_cloud, point_grid, step = 1.0, resolution = 1.0):
 
 def create_base(point_cloud, point_grid, resolution = 1.0, floor_z = 0):
     wall_cloud = point_cloud;
-    for j in range(0, point_grid.shape[1]):
-        wall_cloud = np.append(wall_cloud, [[0, j * resolution, floor_z], [(point_grid.shape[0]-1) * resolution, j * resolution, floor_z]], axis = 0)
+    for j in range(0, point_grid.shape[0]):
+        wall_cloud = np.append(wall_cloud, [[0, j * resolution, floor_z], [(point_grid.shape[1]-1) * resolution, j * resolution, floor_z]], axis = 0)
     
-    for i in range(0, point_grid.shape[0]):
-        wall_cloud = np.append(wall_cloud, [[i * resolution, 0, floor_z], [i * resolution, (point_grid.shape[1]-1) * resolution, floor_z]], axis = 0)
+    for i in range(0, point_grid.shape[1]):
+        wall_cloud = np.append(wall_cloud, [[i * resolution, 0, floor_z], [i * resolution, (point_grid.shape[0]-1) * resolution, floor_z]], axis = 0)
     return wall_cloud;
+
+def get_min_surrounding(point_grid, i, j):
+    min_surrounding = -1 
+    d_i = -1
+    d_j = -1
+    if i-1 >= 0 and (point_grid[i-1][j] < min_surrounding or min_surrounding == -1) and point_grid[i-1][j] > 0:
+        min_surrounding = point_grid[i-1][j]
+        d_i = -1
+        d_j = 0
+
+    if i+1 < point_grid.shape[0] and (point_grid[i+1][j] < min_surrounding or min_surrounding == -1) and point_grid[i+1][j] > 0:
+        min_surrounding = point_grid[i+1][j]
+        d_i = 1
+        d_j = 0
+
+    if j-1 >= 0 and (point_grid[i][j-1] < min_surrounding or min_surrounding == -1) and point_grid[i][j-1] > 0:
+        min_surrounding = point_grid[i][j-1]
+        d_i = 0
+        d_j = -1
+
+    if j+1 < point_grid.shape[1] and (point_grid[i][j+1] < min_surrounding or min_surrounding == -1) and point_grid[i][j+1] > 0:
+        min_surrounding = point_grid[i][j+1]
+        d_i = 0
+        d_j = 1
+
+    return min_surrounding, d_i, d_j
