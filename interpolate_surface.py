@@ -1,11 +1,41 @@
-import utils
-import iostream
+import argparse
 import numpy as np
 
+import utils
+import iostream
+
 if __name__ == "__main__":
-    # orig_points = iostream.read_in_array("Original file name");
-    ground_points = iostream.read_in_array("Ground file name");
-    pruned_points = iostream.read_in_array("Pruned file name");
+    parser = argparse.ArgumentParser(description='Construct a mesh-able point cloud, given a set of ground and building points.')
+    
+    parser.add_argument('--ground',
+                        help='Name of .txt file containing point cloud of ground')
+    parser.add_argument('--buildings',
+                        help='Name of .txt file containing point cloud of buildings')
+    parser.add_argument('-o', '--output', nargs='?', const="output.txt", default="output.txt",
+                        help='Name of .txt file to be output')
+
+    parser.add_argument('-r', '--resolution', type=int, nargs='?', const=4, default=4,
+                        help='Determines resolution of point grid (smaller values -> higher resolution) [Default=4]')
+    parser.add_argument('-s', '--step', type=float, nargs='?', const=0, default=0,
+                        help='Determines rounding of z values [Default=0]')
+    parser.add_argument('-b', '--base', type=float, nargs='?', const=0, default=0,
+                    help='Height of base to be generated [Default = 0]')
+
+    args = parser.parse_args();
+
+    resolution = args.resolution;
+    resolution_z = args.step;
+    base_height = args.base;
+
+    if args.ground != None:
+        ground_points = iostream.file_to_array(args.ground);
+    else:
+        ground_points = iostream.read_in_array("Ground file name");
+    
+    if args.buildings != None:
+        pruned_points = iostream.file_to_array(args.buildings);
+    else:
+        pruned_points = iostream.read_in_array("Buildings file name");
 
     z_mean = np.mean(pruned_points, axis=0)[2]
     z_std = np.std(pruned_points, axis=0)[2]
@@ -16,11 +46,6 @@ if __name__ == "__main__":
             to_delete.append(i)
             
     pruned_points = np.delete(pruned_points, to_delete, axis = 0)
-
-    resolution = 4;
-    resolution_z = 0.5;
-
-    base_height = 5;
 
     max_x, min_x, max_y, min_y, max_z, min_z = utils.find_coords_min_max(ground_points)
 
@@ -79,4 +104,4 @@ if __name__ == "__main__":
 
     wall_cloud = utils.create_base(wall_cloud, pruned_array, resolution, min_z - base_height)
 
-    iostream.write_to_file(wall_cloud, "output.txt");
+    iostream.write_to_file(wall_cloud, args.output);
