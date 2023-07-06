@@ -2,6 +2,7 @@ import math
 
 from scipy import interpolate
 import numpy as np
+import pyvista as pv
 
 import iostream
 
@@ -95,63 +96,37 @@ def dilate(arr, to_dilate = 1, dilated = None, i = 0, j = 0):
     if(j < arr.shape[1]):
         dilate(arr, to_dilate, dilated, i, j+1);
 
-def interpolate_holes(point_array, to_interpolate = None):
+def interpolate_holes(point_array):
     nonzeros = np.nonzero(point_array)
-    if to_interpolate == None:
-        to_interpolate = np.argwhere(point_array == 0);
-    
-    fills = interpolate.griddata(nonzeros, point_array[nonzeros], to_interpolate);
+    grid_x, grid_y = np.meshgrid(range(point_array.shape[0]), range(point_array.shape[1]), indexing='ij')
 
-    for i in range(fills.shape[0]):
-        point_array[to_interpolate[i][0]][to_interpolate[i][1]] = fills[i];
+    point_array = interpolate.griddata(nonzeros, point_array[nonzeros], (grid_x, grid_y));
+
+    holes = np.concatenate((np.where(np.isnan(point_array)), np.where(point_array == 0)), axis=1)
+    if holes.any():
+        point_array = interpolate.griddata(nonzeros, point_array[nonzeros], (grid_x, grid_y), method='nearest')
 
     return point_array
 
-def create_walls(point_cloud, point_grid, step = 1.0, resolution = 1.0):
-    z_step = max(step, resolution);
-    wall_cloud = point_cloud;
-    for i in range(1, point_grid.shape[0] - 1):
-        for j in range(1, point_grid.shape[1] - 1):
-            minZ, d_i, d_j = get_min_surrounding(point_grid, i, j)
-            if(minZ < point_grid[i][j] - z_step and minZ != -1):
-                wall_cloud = np.append(wall_cloud, [[j * resolution + 0.01 * d_j, i * resolution + 0.01 * d_i, minZ]], axis = 0)
-            # while(minZ < point_grid[i][j] - z_step):
-            #     wall_cloud = np.append(wall_cloud, [[i * resolution, j * resolution, minZ]], axis = 0)
-            #     minZ += z_step;
+def point_cloud_to_mesh(point_cloud, base_height = 0, min_maxes = []):
+    if not min_maxes:
+        min_maxes = find_coords_min_max(point_cloud);
 
-    return wall_cloud
+    max_x = min_maxes[0]
+    min_x = min_maxes[1]
+    max_y = min_maxes[2]
+    min_y = min_maxes[3]
+    max_z = min_maxes[4]
+    min_z = min_maxes[5]
 
-def create_base(point_cloud, point_grid, resolution = 1.0, floor_z = 0):
-    wall_cloud = point_cloud;
-    for j in range(0, point_grid.shape[0]):
-        wall_cloud = np.append(wall_cloud, [[0, j * resolution, floor_z], [(point_grid.shape[1]-1) * resolution, j * resolution, floor_z]], axis = 0)
-    
-    for i in range(0, point_grid.shape[1]):
-        wall_cloud = np.append(wall_cloud, [[i * resolution, 0, floor_z], [i * resolution, (point_grid.shape[0]-1) * resolution, floor_z]], axis = 0)
-    return wall_cloud;
+    pv_cloud = pv.PolyData(point_cloud)
+    surface = pv_cloud.delaunay_2d()
 
-def get_min_surrounding(point_grid, i, j):
-    min_surrounding = -1 
-    d_i = -1
-    d_j = -1
-    if i-1 >= 0 and (point_grid[i-1][j] < min_surrounding or min_surrounding == -1) and point_grid[i-1][j] > 0:
-        min_surrounding = point_grid[i-1][j]
-        d_i = -1
-        d_j = 0
+    plane = pv.Plane(
+                center = (surface.center[0], surface.center[1], min_z - base_height),
+                direction = (0, 0, -1.0),
+                i_size = max_x - min_x,
+                j_size = max_y - min_y)
 
-    if i+1 < point_grid.shape[0] and (point_grid[i+1][j] < min_surrounding or min_surrounding == -1) and point_grid[i+1][j] > 0:
-        min_surrounding = point_grid[i+1][j]
-        d_i = 1
-        d_j = 0
-
-    if j-1 >= 0 and (point_grid[i][j-1] < min_surrounding or min_surrounding == -1) and point_grid[i][j-1] > 0:
-        min_surrounding = point_grid[i][j-1]
-        d_i = 0
-        d_j = -1
-
-    if j+1 < point_grid.shape[1] and (point_grid[i][j+1] < min_surrounding or min_surrounding == -1) and point_grid[i][j+1] > 0:
-        min_surrounding = point_grid[i][j+1]
-        d_i = 0
-        d_j = 1
-
-    return min_surrounding, d_i, d_j
+    extruded_mesh = surface.extrude_trim((0, 0, -1.0), plane)
+    return extruded_mesh

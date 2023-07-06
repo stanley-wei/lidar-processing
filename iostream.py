@@ -39,7 +39,7 @@ def write_grid_to_file(point_array, file_name, resolution = 1.0, edit_type_ = 'w
     for i in range(point_array.shape[0]):
         for j in range(point_array.shape[1]):
             if point_array[i][j] != 0:
-                file.write("%f %f %f \n" % (j * resolution, i * resolution, point_array[i][j]))
+                file.write("%f %f %f\n" % (j * resolution, i * resolution, point_array[i][j]))
 
     file.close();
 
@@ -49,7 +49,7 @@ def write_pcloud_to_file(point_array, file_name, edit_type_ = 'w'):
     file = open(file_name, edit_type_);
 
     for i in range(point_array.shape[0]):
-        file.write("%f %f %f \n" % (point_array[i][0], point_array[i][1], point_array[i][2]))
+        file.write("%f %f %f\n" % (point_array[i][0], point_array[i][1], point_array[i][2]))
     
     file.close();
 

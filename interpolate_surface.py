@@ -1,5 +1,9 @@
 import argparse
+import cv2
 import numpy as np
+import pyvista as pv
+
+from scipy import ndimage
 
 import utils
 import iostream
@@ -11,10 +15,12 @@ if __name__ == "__main__":
                         help='Name of .txt file containing point cloud of ground')
     parser.add_argument('--buildings',
                         help='Name of .txt file containing point cloud of buildings')
-    parser.add_argument('-o', '--output', nargs='?', const="output.txt", default="output.txt",
+    parser.add_argument('--mask',
+                        help='Name of image file containing image mask of ground points')
+    parser.add_argument('-o', '--output', nargs='?', const="output.stl", default="output.stl",
                         help='Name of .txt file to be output')
 
-    parser.add_argument('-r', '--resolution', type=int, nargs='?', const=4, default=4,
+    parser.add_argument('-r', '--resolution', type=float, nargs='?', const=4, default=4,
                         help='Determines resolution of point grid (smaller values -> higher resolution) [Default=4]')
     parser.add_argument('-s', '--step', type=float, nargs='?', const=0, default=0,
                         help='Determines rounding of z values [Default=0]')
@@ -37,71 +43,54 @@ if __name__ == "__main__":
     else:
         pruned_points = iostream.read_in_array("Buildings file name");
 
+    z_mean = np.mean(ground_points, axis=0)[2]
+    z_std = np.std(ground_points, axis=0)[2]
+
+    to_delete = []
+    for i in range(ground_points.shape[0]):
+        if abs(ground_points[i][2] - z_mean) > 4 * z_std:
+            to_delete.append(i)
+    ground_points = np.delete(ground_points, to_delete, axis = 0)
+
     z_mean = np.mean(pruned_points, axis=0)[2]
     z_std = np.std(pruned_points, axis=0)[2]
 
     to_delete = []
     for i in range(pruned_points.shape[0]):
-        if(pruned_points[i][2] > z_mean + 4 * z_std):
+        if abs(pruned_points[i][2] - z_mean) > 4 * z_std:
             to_delete.append(i)
-            
     pruned_points = np.delete(pruned_points, to_delete, axis = 0)
 
     max_x, min_x, max_y, min_y, max_z, min_z = utils.find_coords_min_max(ground_points)
 
-    # orig_array = utils.point_cloud_to_grid(orig_points, resolution, resolution_z, [min_x, min_y]);
     ground_array = utils.point_cloud_to_grid(ground_points, resolution, resolution_z, [min_x, max_x, min_y, max_y]);
     pruned_array = utils.point_cloud_to_grid(pruned_points, resolution, resolution_z, [min_x, max_x, min_y, max_y]);
 
-    new_cloud = np.zeros([ground_array.shape[0], ground_array.shape[1]], dtype = np.byte);
+    if args.mask != None:
+        mask = cv2.imread(args.mask)
+        to_delete = []
+        for i in range(pruned_array.shape[0]-1):
+            for j in range(pruned_array.shape[1]-1):
+                if(mask[i][j][0] == 255):
+                    to_delete.append([i, j])
 
-    for i in range(ground_array.shape[0]):
-        for j in range(ground_array.shape[1]):
-            if(pruned_array[i][j] != 0):
-                new_cloud[i][j] = ord('b');
-            elif(ground_array[i][j] != 0):
-                new_cloud[i][j] = ord('g');
-    
-    zeros = np.argwhere(new_cloud == 0);
-    ground_interpolate = np.empty(shape = (0, 2), dtype = int)
-    other_interpolate = np.empty(shape = (0, 2), dtype = int)
+        for point in to_delete:
+            pruned_array[point[0]][point[1]] = 0
 
-    no_change = False;
-    while(no_change == False):
-        no_change = True;
-        for i in range(new_cloud.shape[0]):
-            for j in range(new_cloud.shape[1]):
-                if(new_cloud[i][j] == 0):
-                    if((i != 0 and new_cloud[i-1][j] == ord('g')) or (i < new_cloud.shape[0]-1 and new_cloud[i+1][j] == ord('g')) or (j != 0 and new_cloud[i][j-1] == ord('g')) or (j < new_cloud.shape[1]-1 and new_cloud[i][j+1] == ord('g'))):
-                        new_cloud[i][j] = ord('g');
-                        no_change = False;
-                        ground_interpolate = np.append(ground_interpolate, [[i, j]], axis=0);
-
-    #ground_interpolate = utils.dilate(new_cloud, ord('g'));
-    
-    fill_zeros = np.argwhere(new_cloud == 0);
-    for i in range(fill_zeros.shape[0]):
-        new_cloud[fill_zeros[i][0]][fill_zeros[i][1]] = ord('b');
-        other_interpolate = np.append(other_interpolate, [[fill_zeros[i][0], fill_zeros[i][1]]], axis=0);
+    interpolate_mask = np.zeros([ground_array.shape[0], ground_array.shape[1]], dtype = np.byte);
+    for i in range(pruned_array.shape[0]):
+        for j in range(pruned_array.shape[1]):
+            if pruned_array[i][j] != 0:
+                interpolate_mask[i][j] = 1
+    interpolate_mask = ndimage.binary_fill_holes(interpolate_mask).astype(np.byte)
 
     ground_array = utils.interpolate_holes(ground_array);
 
-    for i in range(ground_interpolate.shape[0]):
-        pruned_array[ground_interpolate[i][0]][ground_interpolate[i][1]] = ground_array[ground_interpolate[i][0]][ground_interpolate[i][1]];
-        
-    pruned_array = utils.interpolate_holes(pruned_array);
+    combined_array = np.where(interpolate_mask == 0, ground_array, pruned_array)
+    combined_array = utils.interpolate_holes(combined_array)
 
-    pruned_cloud = utils.grid_to_point_cloud(pruned_array, resolution);
+    pruned_cloud = utils.grid_to_point_cloud(combined_array, resolution);
 
-    wall_cloud = utils.create_walls(pruned_cloud, pruned_array, resolution_z, resolution);
+    extruded_mesh = utils.point_cloud_to_mesh(pruned_cloud, base_height, [max_x, min_x, max_y, min_y, max_z, min_z])
 
-    to_delete = []
-    for i in range(wall_cloud.shape[0]):
-        if(wall_cloud[i][2] == 0):
-            to_delete.append(i)
-
-    wall_cloud = np.delete(wall_cloud, to_delete, axis = 0)
-
-    wall_cloud = utils.create_base(wall_cloud, pruned_array, resolution, min_z - base_height)
-
-    iostream.write_to_file(wall_cloud, args.output);
+    extruded_mesh.save(args.output)
