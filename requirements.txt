@@ -6,6 +6,8 @@ fonttools==4.41.0
 idna==3.4
 kiwisolver==1.4.4
 laspy==2.4.1
+laszip==0.2.3
+lazrs==0.5.1
 matplotlib==3.7.2
 numpy==1.25.1
 opencv-python==4.8.0.74
