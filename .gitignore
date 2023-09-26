@@ -1,10 +1,6 @@
-Archive/*
-Input/*
-Output/*
-env/*
 _pycache_/*
+env/*
 
 *.cfg
+*.DS_Store
 *.pyc
-
-.DS_Store
