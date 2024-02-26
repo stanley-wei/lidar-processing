@@ -205,7 +205,7 @@ class PointGrid:
 		combined_grid = PointGrid(point_grid=np.where(overlay_mask == 0, base_grid.point_grid, overlaying_grid.point_grid),
 			resolution=base_grid.resolution, bounds=combined_bounds)
 
-		return combined_grid
+		return combined_grid, overlay_mask
 
 
 	def generate_image(self, file_name):

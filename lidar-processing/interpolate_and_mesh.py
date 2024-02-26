@@ -30,7 +30,7 @@ def request_mask(point_grid, mask_name, generate_mask):
         mask_image = cv2.imread(mask_file, cv2.IMREAD_GRAYSCALE)
 
     if(mask_image.shape[0:2] != point_grid.shape):
-        print("Mask image must be same size as array")
+        print(f"Mask image size is different from array size: mask {mask_image.shape} vs array {point_grid.shape}")
         sys.exit(1)
 
     return mask_image
@@ -51,7 +51,7 @@ if __name__ == "__main__":
                         help='Determines resolution of point grid (smaller values -> higher resolution) [Default=4]')
     interpolation_options.add_argument('-b', '--base', type=float, nargs='?', const=0, default=0,
                     help='Height of base to be generated [Default = 0]')
-    interpolation_options.add_argument('--disable-discretization', dest='discretize', action='store_false',
+    interpolation_options.add_argument('--disable-discretize', dest='disable_discretize', action='store_true',
                         help='Prevent point cloud from being converted to discretized grid [Default = True]')
 
 
@@ -97,10 +97,10 @@ if __name__ == "__main__":
     # Separate LiDAR data by classification
     # See: https://desktop.arcgis.com/en/arcmap/latest/manage-data/las-dataset/lidar-point-classification.htm
     ground_points = PointCloud(las_xyz[np.where(las_classifications == 2)])
-    ground_points.remove_outliers(num_stdev = 4)
+    ground_points.remove_outliers(num_stdev = 2)
 
     building_points = PointCloud(las_xyz[np.where(las_classifications == 6)])
-    z_mean, z_std = building_points.remove_outliers(num_stdev=4)
+    z_mean, z_std = building_points.remove_outliers(num_stdev=2)
 
     extra_points = PointCloud(las_xyz[np.where(np.isin(las_classifications, [2, 5, 6], invert=True))])
     extra_points.remove_outliers(num_stdev=0.5)
@@ -116,15 +116,13 @@ if __name__ == "__main__":
 
     ground_array.interpolate_holes()
 
-    interpolated_array = PointGrid.overlay(base_grid=ground_array, overlaying_grid=pruned_array)
+    interpolated_array, interpolate_mask = PointGrid.overlay(base_grid=ground_array, overlaying_grid=pruned_array)
     interpolated_array.interpolate_holes()
 
-    if args.discretize: # Take grid, rather than raw point cloud, as source of non-ground points
-        pruned_cloud = interpolated_array.to_point_cloud(invert_xy=True)
-        combined_cloud = PointCloud.combine(pruned_cloud, ground_points)
+    if not args.disable_discretize: # Take grid, rather than raw point cloud, as source of non-ground points
+        output_cloud = interpolated_array.to_point_cloud(invert_xy=True)
     else:
-        combined_cloud = PointCloud.combine(pruned_points, ground_points)
-
+        output_cloud = PointCloud.combine(pruned_points, ground_points)
 
     # Generate and apply masks (if applicable)
     excluded_points = [] # Points to remove during final meshing process
@@ -132,7 +130,7 @@ if __name__ == "__main__":
     if args.mask:
         print("Applying mask")
         mask_image = request_mask(interpolated_array, args.mask, args.generate_mask)
-        excluded_points = combined_cloud.apply_mask(mask_image, interpolated_array.resolution)
+        excluded_points = output_cloud.apply_mask(mask_image, interpolated_array.resolution)
 
     if args.tree_mask:
         print("Applying tree mask")
@@ -143,13 +141,13 @@ if __name__ == "__main__":
         tree_cloud = tree_array.to_point_cloud(invert_xy=True, ignore_zeros=True)
 
         tree_mask = request_mask(tree_array, args.tree_mask, args.generate_tree_mask)
-        excluded_points = excluded_points + tree_cloud.apply_mask(tree_mask, tree_array.resolution, start_index=combined_cloud.shape[0])
-        combined_cloud = PointCloud.combine(combined_cloud, tree_cloud)
+        excluded_points = excluded_points + tree_cloud.apply_mask(tree_mask, tree_array.resolution, start_index=output_cloud.shape[0])
+        output_cloud = PointCloud.combine(output_cloud, tree_cloud)
 
 
     # Convert point cloud to mesh & output
     print("Generating mesh")
-    extruded_mesh = combined_cloud.generate_mesh(excluded_points, base_height=args.base)
+    extruded_mesh = output_cloud.generate_mesh(excluded_points, base_height=args.base)
 
     extruded_mesh.save(args.output)
     print("Mesh saved to file: " + args.output)

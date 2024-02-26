@@ -19,8 +19,8 @@ The script `lidar-processing/interpolate_and_mesh.py` takes as input a *classifi
  - `-r`/`--resolution [RESOLUTION]`: Specifies the resolution (meters/cell length) used when discretizing the point cloud. [*Default: 4*]
 	 - *Note: Low resolutions (<1.0, e.g.) may result in odd-looking meshes.*
  - `-b`/`--base [BASE]`: Specifies the base height (i.e. height of the lowest point) in the output mesh. Can be either positive or negative. [*Default: 0*]
- - `--disable-discretization`: By default, the program uses a discretized representation of a point cloud (rather than the raw point cloud itself) during meshing. This option causes the program to use the raw point cloud instead.
-	 - *Note: May result in messier/less-friendly meshes.*
+ - `--disable-discretize`: By default, the program uses a discretized grid representation of the LiDAR point cloud (rather than the raw point cloud itself) during meshing. This option causes the program to use the raw point cloud instead.
+	 - *Note: May result in messier or otherwise less friendly meshes.*
 
 **Masking Options**:
 - `--mask [MASK_NAME]`: This option takes a Boolean image mask [file name] that is applied to the output mesh. Points [pixels] with value `>0` will be retained; points/pixels with value `=0` will be ignored.
@@ -31,6 +31,6 @@ The script `lidar-processing/interpolate_and_mesh.py` takes as input a *classifi
 (*See `python lidar-processing/interpolate_and_mesh.py -h` for more details*)
 
 ## Setup
- 1. Clone this directory: `git clone https://github.com/stanley-wei/lidar-processing.git`
+ 1. Clone this repository: `git clone https://github.com/stanley-wei/lidar-processing.git`
  2. Install the required packages (*requires Python3*): `cd lidar-processing && pip install -r requirements.txt`
 
