@@ -7,7 +7,9 @@ Using Python to process/filter/interpolate LiDAR point clouds. Uses classified L
 ## Usage
 The script `lidar-processing/interpolate_and_mesh.py` takes as input a *classified* (i.e. split into buildings, ground, etc.) LiDAR `.las`/`.laz` file, and will output a 3D mesh. Supports modification of mesh output via image masking.
 
-[*Note: This repository does not currently support classification. Many GIS applications support classification of LiDAR data; I personally used CloudCompare and LASTools for interfacing with LiDAR files.*]
+(*LiDAR classification codes as specified [here](https://desktop.arcgis.com/en/arcmap/latest/manage-data/las-dataset/lidar-point-classification.htm)*)
+
+[*Note: This repository does not currently support classification. Many GIS applications support classification of LiDAR data; I personally used [CloudCompare](https://www.cloudcompare.org/) and [LASTools](https://rapidlasso.de/product-overview/) for interfacing with LiDAR files.*]
 
 **Example:**
 <br><code>python lidar-processing/interpolate_and_mesh.py input.las output.stl --mask my_mask.png</code>
