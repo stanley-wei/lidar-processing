@@ -21,6 +21,7 @@ The script `lidar-processing/interpolate_and_mesh.py` takes as input a *classifi
  - `-b`/`--base [BASE]`: Specifies the base height (i.e. height of the lowest point) in the output mesh. Can be either positive or negative. [*Default: 0*]
  - `--disable-discretize`: By default, the program uses a discretized grid representation of the LiDAR point cloud (rather than the raw point cloud itself) during meshing. This option causes the program to use the raw point cloud instead.
 	 - *Note: May result in messier or otherwise less friendly meshes.*
+ - `--include-unclassified`: By default, the program will throw out all points not labeled as being either ground or building. This option causes the program to keep all points not labeled as "tree". (To keep tree points, use the `--tree-mask` option.)
 
 **Masking Options**:
 - `--mask [MASK_NAME]`: This option takes a Boolean image mask [file name] that is applied to the output mesh. Points [pixels] with value `>0` will be retained; points/pixels with value `=0` will be ignored.

@@ -52,7 +52,9 @@ if __name__ == "__main__":
     interpolation_options.add_argument('-b', '--base', type=float, nargs='?', const=0, default=0,
                     help='Height of base to be generated [Default = 0]')
     interpolation_options.add_argument('--disable-discretize', dest='disable_discretize', action='store_true',
-                        help='Prevent point cloud from being converted to discretized grid [Default = True]')
+                        help='Prevents point cloud from being converted to discretized grid')
+    interpolation_options.add_argument('--include-unclassified', dest='incl_unclassified', action='store_true',
+                        help='Include buildings not classified as ground or building in meshing')
 
 
     masking_options = parser.add_argument_group("masking options")
@@ -102,13 +104,14 @@ if __name__ == "__main__":
     building_points = PointCloud(las_xyz[np.where(las_classifications == 6)])
     z_mean, z_std = building_points.remove_outliers(num_stdev=2)
 
-    extra_points = PointCloud(las_xyz[np.where(np.isin(las_classifications, [2, 5, 6], invert=True))])
-    extra_points.remove_outliers(num_stdev=0.5)
+    if args.incl_unclassified:
+        extra_points = PointCloud(las_xyz[np.where(np.isin(las_classifications, [2, 5, 6], invert=True))])
+        extra_points.remove_outliers(num_stdev=0.5)
 
-    pruned_points = PointCloud.combine(building_points, extra_points)
+        building_points = PointCloud.combine(building_points, extra_points)
 
     ground_array = ground_points.to_point_grid(resolution, ground_points.bounds);
-    pruned_array = pruned_points.to_point_grid(resolution, ground_points.bounds);
+    pruned_array = building_points.to_point_grid(resolution, ground_points.bounds);
 
 
     # Interpolate ground, non-ground arrays & combine
@@ -122,7 +125,7 @@ if __name__ == "__main__":
     if not args.disable_discretize: # Take grid, rather than raw point cloud, as source of non-ground points
         output_cloud = interpolated_array.to_point_cloud(invert_xy=True)
     else:
-        output_cloud = PointCloud.combine(pruned_points, ground_points)
+        output_cloud = PointCloud.combine(building_points, ground_points)
 
     # Generate and apply masks (if applicable)
     excluded_points = [] # Points to remove during final meshing process
