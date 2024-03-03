@@ -1,6 +1,9 @@
 import numpy as np
 
 
+def divide_ceiling(a, b):
+    return -(a // -b)
+
 def combine_bounds(bounds1, bounds2):
     '''
     Given two sets of bounds (bounds1, bounds2), combines the two:

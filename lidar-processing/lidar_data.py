@@ -3,8 +3,10 @@ import math
 import numpy as np
 import pyvista as pv
 from scipy import interpolate, ndimage
+import time
 from tqdm import tqdm
 
+import config
 import utils
 
 
@@ -133,7 +135,7 @@ class PointCloud:
 			surface, indices = surface.remove_points(excluded_points)
 
 		plane = pv.Plane(
-			center = (surface.center[0], surface.center[1], bounds['min_z'] - base_height),
+			center = (surface.center[0], surface.center[1], pv_cloud.bounds[4] - base_height),
 			direction = (0, 0, -1.0),
 			i_size = bounds['max_x'] - bounds['min_x'],
 			j_size = bounds['max_y'] - bounds['min_y'])
@@ -160,17 +162,44 @@ class PointGrid:
 		return self.point_grid.shape
 
 
-	def interpolate_holes(self):
+	def interpolate_holes(self, method=config.INTERPOLATION_DIRECT):
 		'''
 		Fills any holes (i.e. zero values) in grid via interpolation.
 		Uses combination of polynomial and nearest-neighbor interpolation.
 		'''
-		nonzeros = np.nonzero(self.point_grid)
-		not_nan_or_zero = np.asarray(nonzeros)[:, np.where(~np.isnan(self.point_grid[nonzeros]))[0]]
-		grid_x, grid_y = np.meshgrid(range(self.point_grid.shape[0]), range(self.point_grid.shape[1]), indexing='ij')
+		# Runs a single interpolate.griddata() across entire grid
+		if method == config.INTERPOLATION_DIRECT:
+			nonzeros = np.nonzero(self.point_grid)
+			not_nan_or_zero = np.asarray(nonzeros)[:, np.where(~np.isnan(self.point_grid[nonzeros]))[0]]
+			zeros = np.where(self.point_grid == 0)
 
-		self.point_grid = interpolate.griddata((not_nan_or_zero[0], not_nan_or_zero[1]), 
-			self.point_grid[(not_nan_or_zero[0], not_nan_or_zero[1])], (grid_x, grid_y));
+			self.point_grid[zeros[0], zeros[1]] = interpolate.griddata((not_nan_or_zero[0], not_nan_or_zero[1]),
+				self.point_grid[(not_nan_or_zero[0], not_nan_or_zero[1])], (zeros[0], zeros[1]));
+
+		# Uses a sliding-window approach to progressively fill in array
+		elif method == config.INTERPOLATION_INCREMENTAL:
+			x_padding = utils.divide_ceiling(config.INTERPOLATION_TILE - (self.point_grid.shape[0] % config.INTERPOLATION_TILE), 2) + config.INTERPOLATION_PADDING
+			y_padding = utils.divide_ceiling(config.INTERPOLATION_TILE - (self.point_grid.shape[1] % config.INTERPOLATION_TILE), 2) + config.INTERPOLATION_PADDING
+
+			padded_grid = np.pad(self.point_grid, ((x_padding, x_padding), (y_padding, y_padding)), "symmetric")
+
+			for i in range(config.INTERPOLATION_PADDING, padded_grid.shape[0]-config.INTERPOLATION_TILE, config.INTERPOLATION_TILE):
+				for j in range(config.INTERPOLATION_PADDING, padded_grid.shape[1]-config.INTERPOLATION_TILE, config.INTERPOLATION_TILE):
+
+					interpolation_window = np.asarray(np.meshgrid(np.arange(i - config.INTERPOLATION_PADDING, i + config.INTERPOLATION_TILE + config.INTERPOLATION_PADDING),
+										np.arange(j - config.INTERPOLATION_PADDING, j + config.INTERPOLATION_TILE + config.INTERPOLATION_PADDING), indexing='ij'))
+
+					interpolation_region = np.asarray(np.meshgrid(np.arange(i, i + config.INTERPOLATION_TILE),
+										np.arange(j, j + config.INTERPOLATION_TILE), indexing='ij'))
+
+					nonzeros = np.nonzero(padded_grid[interpolation_window[0], interpolation_window[1]])
+					padded_grid[interpolation_region[0], interpolation_region[1]] = interpolate.griddata(nonzeros, padded_grid[nonzeros],
+						(interpolation_region[0], interpolation_region[1]))
+
+			point_indices = np.meshgrid(range(x_padding, padded_grid.shape[0] - x_padding),
+						range(y_padding, padded_grid.shape[0] - y_padding), indexing='ij')
+			self.point_grid = padded_grid[point_indices[0], point_indices[1]]
+
 
 		# If not able to find values for all zero points via polynomial interpolation,
 		# use nearest-neighbors interpolation to fill in remaining zeros.
@@ -178,9 +207,11 @@ class PointGrid:
 		if holes.any():
 			nonzeros = np.nonzero(self.point_grid)
 			not_nan_or_zero = np.asarray(nonzeros)[:, np.where(~np.isnan(self.point_grid[nonzeros]))[0]]
-			self.point_grid = interpolate.griddata((not_nan_or_zero[0], not_nan_or_zero[1]), 
+
+			zeros = np.where(self.point_grid == 0)
+			self.point_grid[zeros[0], zeros[1]] = interpolate.griddata((not_nan_or_zero[0], not_nan_or_zero[1]),
 				self.point_grid[(not_nan_or_zero[0], not_nan_or_zero[1])], 
-				(grid_x, grid_y), method='nearest');
+				(zeros[0], zeros[1]), method='nearest');
 
 
 	def overlay(base_grid, overlaying_grid):
