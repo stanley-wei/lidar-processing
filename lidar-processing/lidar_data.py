@@ -167,8 +167,10 @@ class PointGrid:
 		Fills any holes (i.e. zero values) in grid via interpolation.
 		Uses combination of polynomial and nearest-neighbor interpolation.
 		'''
+
 		# Runs a single interpolate.griddata() across entire grid
 		if method == config.INTERPOLATION_DIRECT:
+
 			nonzeros = np.nonzero(self.point_grid)
 			not_nan_or_zero = np.asarray(nonzeros)[:, np.where(~np.isnan(self.point_grid[nonzeros]))[0]]
 			zeros = np.where(self.point_grid == 0)
@@ -178,6 +180,7 @@ class PointGrid:
 
 		# Uses a sliding-window approach to progressively fill in array
 		elif method == config.INTERPOLATION_INCREMENTAL:
+
 			x_padding = utils.divide_ceiling(config.INTERPOLATION_TILE - (self.point_grid.shape[0] % config.INTERPOLATION_TILE), 2) + config.INTERPOLATION_PADDING
 			y_padding = utils.divide_ceiling(config.INTERPOLATION_TILE - (self.point_grid.shape[1] % config.INTERPOLATION_TILE), 2) + config.INTERPOLATION_PADDING
 

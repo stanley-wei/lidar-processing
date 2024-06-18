@@ -1,7 +1,10 @@
-
 # lidar-processing
 Using Python to process/filter/interpolate LiDAR point clouds. Uses classified LiDAR `.las`/`.laz` files to generate 3D meshes.
 
+
+## Setup
+ 1. Clone this repository: `git clone https://github.com/stanley-wei/lidar-processing.git`
+ 2. Install the required packages (*requires Python3*): `cd lidar-processing && pip install -r lidar-processing/requirements.txt`
 
 
 ## Usage
@@ -30,8 +33,3 @@ The script `lidar-processing/interpolate_and_mesh.py` takes as input a *classifi
 - `--generate-tree-mask`: Similar to `--generate-mask`
 
 (*See `python lidar-processing/interpolate_and_mesh.py -h` for more details*)
-
-## Setup
- 1. Clone this repository: `git clone https://github.com/stanley-wei/lidar-processing.git`
- 2. Install the required packages (*requires Python3*): `cd lidar-processing && pip install -r requirements.txt`
-
