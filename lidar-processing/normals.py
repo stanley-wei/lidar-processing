@@ -45,10 +45,10 @@ def voxel_filter(point_cloud, resolution=5.0):
 
 
 @timebudget
-def classify_points(point_cloud, num_neighbors, planarity):
+def classify_points(point_cloud, search_area, planarity):
 	points_kdtree = spatial.KDTree(data=point_cloud)
 
-	query = points_kdtree.query_ball_tree(points_kdtree, r=6.0)
+	query = points_kdtree.query_ball_tree(points_kdtree, r=search_area)
 
 	evrs = np.ones((point_cloud.shape[0]), dtype=float)
 	pca = PCA(n_components=3)
@@ -60,13 +60,10 @@ def classify_points(point_cloud, num_neighbors, planarity):
 
 	evrs = evrs / np.max(evrs)
 
-	cloud = pv.PolyData(point_cloud)
-
-	cloud['point_color'] = evrs
-
-	pv.plot(cloud, scalars='point_color')
+	return np.where(evrs < planarity, 2, 5)
 
 
+@timebudget
 def remove_outliers(point_cloud, num_stdev = 2.0):
 	'''
 	Removes any outlying points that are [num_stdev] standard deviations above
@@ -76,21 +73,24 @@ def remove_outliers(point_cloud, num_stdev = 2.0):
 	mean_z = np.mean(point_cloud, axis=0)[2]
 	std_z = np.std(point_cloud, axis=0)[2]
 
-	# point_cloud = point_cloud[np.nonzero(abs(point_cloud[2] - mean_z) > num_stdev * std_z)]
-	to_delete = []
+	indices_mask = np.ones((point_cloud.shape[0]), dtype=bool)
 	for i in range(point_cloud.shape[0]):
 		if abs(point_cloud[i][2] - mean_z) > num_stdev * std_z:
-			to_delete.append(i)
+			indices_mask[i] = False
 
-	point_cloud = np.delete(point_cloud, to_delete, axis=0)
-	# point_cloud = point_cloud[np.nonzero(point_cloud[2] > 200)]
-
-	return point_cloud
+	return point_cloud[indices_mask]
 
 if __name__ == "__main__":
-	with laspy.open(sys.argv[1]) as file:
-		points = np.asarray(file.read().xyz)
+	las_data = laspy.open(sys.argv[1]).read()
+	points = np.asarray(las_data.xyz)
 
 	new_points = voxel_filter(points, resolution=float(5))
-	my_points = remove_outliers(new_points)
-	classify_points(my_points, 6, 10)
+	cleaned_points = remove_outliers(new_points)
+	classifications = classify_points(cleaned_points, search_area=6, planarity=0.15)
+
+	# Write to LiDAR file
+	classified_header = laspy.LasHeader(version="1.4", point_format=6)
+	classified_las = laspy.LasData(classified_header)
+	classified_las.xyz = cleaned_points
+	classified_las.classification = classifications
+	classified_las.write("classified.laz")
