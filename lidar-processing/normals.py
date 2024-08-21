@@ -18,37 +18,53 @@ def voxel_filter(point_cloud, resolution=5.0):
 
 	point_index_pairs = np.column_stack((np.arange(0, point_cloud.shape[0]), 
 			np.zeros((point_cloud.shape[0]), dtype=int)))
-	for i in range(point_cloud.shape[0]):
-		index = math.ceil((point_cloud[i][0] - min_bounds[0]) / resolution) \
-				+ math.ceil((point_cloud[i][1] - min_bounds[1]) / resolution) * num_x_cells \
-				+ math.ceil((point_cloud[i][1] - min_bounds[1]) / resolution) * num_x_cells * num_y_cells
-		point_index_pairs[i][1] = index
 
-	sorted_point_indices = point_index_pairs[point_index_pairs[:, 1].argsort()]
+	point_index_pairs[:, 1] = np.ceil((point_cloud[:, 0] - min_bounds[0]) / resolution) \
+		   + np.ceil((point_cloud[:, 1] - min_bounds[1]) / resolution) * num_x_cells \
+		   + np.ceil((point_cloud[:, 1] - min_bounds[1]) / resolution) * num_x_cells * num_y_cells
 
-	downsampled_cloud = np.zeros((point_cloud.shape[0], 3), dtype=point_cloud.dtype)
+	values, counts = np.unique(point_index_pairs[:, 1], return_counts=True)
 
-	idx = 0
-	num_added_points = 0
-	while idx < point_index_pairs.shape[0]:
-		start_idx = idx
+	sorted_point_indices = point_index_pairs[point_index_pairs[:, 1].argsort(), 0]
 
-		idx += 1
-		while (idx < point_index_pairs.shape[0] and 
-			   point_index_pairs[idx, 1] == point_index_pairs[idx-1, 1]):
-			idx += 1
+	downsampled_cloud = np.zeros((values.shape[0], 3), dtype=point_cloud.dtype)
 
-		downsampled_cloud[num_added_points, :] = np.mean(point_cloud[start_idx:idx], axis=0)
-		num_added_points += 1
+	value_indices = np.concatenate((np.zeros(1, dtype=int), np.cumsum(counts)))
+	for i in range(1, len(values)):
+		downsampled_cloud[i] = np.mean(point_cloud[sorted_point_indices[value_indices[i-1]:value_indices[i]]], axis=0)
 
-	return downsampled_cloud[:num_added_points]
+	return downsampled_cloud
 
+
+def retrieve_point_neighborhoods(point_cloud, radius, k, type='spherical'):
+	'''
+	type: 'spherical', 'knn', 'cylindrical'
+	'''
+
+	if type not in ['spherical', 'knn', 'cylindrical']:
+		raise TypeError(f"Parameter 'type' must be one of: ['spherical', 'knn', 'cylindrical'].")
+
+	if type == 'spherical':
+		points_kdtree = spatial.KDTree(data=point_cloud)
+		query = points_kdtree.query_ball_tree(points_kdtree, r=radius)
+
+		return query, None
+
+	elif type == 'cylindrical':
+		points_kdtree = spatial.KDTree(data=point_cloud[:, 0:2])
+		query = points_kdtree.query_ball_tree(points_kdtree, r=radius)
+
+		return query, None
+
+	elif type == 'knn':
+		points_kdtree = spatial.KDTree(data=point_cloud)
+		query = points_kdtree.query(point_cloud, k=k)
+
+		return query[1], query[0]
 
 @timebudget
-def classify_points(point_cloud, search_area, planarity):
-	points_kdtree = spatial.KDTree(data=point_cloud)
-
-	query = points_kdtree.query_ball_tree(points_kdtree, r=search_area)
+def classify_points(point_cloud, radius, k, planarity, type='spherical'):
+	query = retrieve_point_neighborhoods(point_cloud, type, radius, k)
 
 	evrs = np.ones((point_cloud.shape[0]), dtype=float)
 	pca = PCA(n_components=3)
@@ -56,6 +72,10 @@ def classify_points(point_cloud, search_area, planarity):
 		neighbors = point_cloud[query[i]]
 		if neighbors.shape[0] > 3:
 			pca.fit(neighbors)
+
+			linearity = (pca.explained_variance_[1] - pca.explained_variance_[2]) / pca.explained_variance_[1]
+			planarity = (pca.explained_variance_[2] - pca.explained_variance_[3]) / pca.explained_variance_[1]
+			sphericity = pca.explained_variance_[3] / pca.explained_variance_[1]
 			evrs[i] = pca.explained_variance_[2]
 
 	evrs = evrs / np.max(evrs)
@@ -80,12 +100,64 @@ def remove_outliers(point_cloud, num_stdev = 2.0):
 
 	return point_cloud[indices_mask]
 
+@timebudget
+def remove_statistical_outliers(point_cloud, num_neighbors=20, num_stdev=2.0):
+	points_kdtree = spatial.KDTree(data=point_cloud)
+
+	query = points_kdtree.query(point_cloud, k=num_neighbors)
+
+	mean_neighbor_distance = np.mean(np.asarray(query[0]), axis=1)
+
+	stdev = np.std(mean_neighbor_distance)
+
+	threshold = np.mean(mean_neighbor_distance) + num_stdev * stdev
+
+	return point_cloud[mean_neighbor_distance < threshold, :]
+
+
+@timebudget
+def remove_radius_outliers(point_cloud, num_neighbors=5, radius=10.0):
+	points_kdtree = spatial.KDTree(data=point_cloud)
+
+	query = points_kdtree.query_ball_tree(points_kdtree, r=radius)
+
+	indices = np.zeros(len(query), dtype=bool)
+	for i in range(len(query)):
+		indices[i] = True if len(query[i]) >= num_neighbors else False
+
+	return point_cloud[indices, :]
+
+
+def estimate_normals(point_cloud, num_neighbors=30):
+	points_kdtree = spatial.KDTree(data=point_cloud)
+
+	query = points_kdtree.query_ball_tree(points_kdtree, r=search_area)
+
+	normals = np.zeros((point_cloud.shape[0], 3), dtype=float)
+	pca = PCA(n_components=3)
+	for i in range(point_cloud.shape[0]):
+		neighbors = point_cloud[query[i]]
+		if neighbors.shape[0] > 3:
+			pca.fit(neighbors)
+
+			normals[i] = pca.components_
+
+	return normals
+
+def color_by_classification(point_cloud, classifications):
+	cloud = pv.PolyData(point_cloud)
+
+	cloud['point_color'] = classifications
+
+	pv.plot(cloud, scalars='point_color')
+
+
 if __name__ == "__main__":
 	las_data = laspy.open(sys.argv[1]).read()
 	points = np.asarray(las_data.xyz)
 
-	new_points = voxel_filter(points, resolution=float(5))
-	cleaned_points = remove_outliers(new_points)
+	new_points = voxel_filter(points, resolution=float(2.0))
+	cleaned_points = remove_statistical_outliers(new_points)
 	classifications = classify_points(cleaned_points, search_area=6, planarity=0.15)
 
 	# Write to LiDAR file
