@@ -1,36 +1,42 @@
 import math
 import numpy as np
 import pyvista as pv
-from scipy import spatial
+from scipy import spatial, stats
 from timebudget import timebudget
+
+import lidar_data
 
 
 @timebudget
 def voxel_filter(point_cloud, resolution=5.0):
-	min_bounds = np.min(point_cloud, axis=0)
-	max_bounds = np.max(point_cloud, axis=0)
+	min_bounds = np.min(point_cloud.point_cloud, axis=0)
+	max_bounds = np.max(point_cloud.point_cloud, axis=0)
 
 	num_x_cells = math.ceil((max_bounds[0] - min_bounds[0]) / resolution)
 	num_y_cells = math.ceil((max_bounds[1] - min_bounds[1]) / resolution)
 
-	point_index_pairs = np.column_stack((np.arange(0, point_cloud.shape[0]), 
+	point_index_pairs = np.column_stack((np.arange(0, point_cloud.point_cloud.shape[0]), 
 			np.zeros((point_cloud.shape[0]), dtype=int)))
 
-	point_index_pairs[:, 1] = np.ceil((point_cloud[:, 0] - min_bounds[0]) / resolution) \
-		   + np.ceil((point_cloud[:, 1] - min_bounds[1]) / resolution) * num_x_cells \
-		   + np.ceil((point_cloud[:, 1] - min_bounds[1]) / resolution) * num_x_cells * num_y_cells
+	point_index_pairs[:, 1] = np.ceil((point_cloud.point_cloud[:, 0] - min_bounds[0]) / resolution) \
+		   + np.ceil((point_cloud.point_cloud[:, 1] - min_bounds[1]) / resolution) * num_x_cells \
+		   + np.ceil((point_cloud.point_cloud[:, 1] - min_bounds[1]) / resolution) * num_x_cells * num_y_cells
 
 	values, counts = np.unique(point_index_pairs[:, 1], return_counts=True)
 
 	sorted_point_indices = point_index_pairs[point_index_pairs[:, 1].argsort(), 0]
 
-	downsampled_cloud = np.zeros((values.shape[0], 3), dtype=point_cloud.dtype)
+	downsampled_cloud = np.zeros((values.shape[0], 3), dtype=point_cloud.point_cloud.dtype)
+	if point_cloud.classification is not None:
+		downsampled_classes = np.zeros((values.shape[0]), dtype=int)
 
 	value_indices = np.concatenate((np.zeros(1, dtype=int), np.cumsum(counts)))
 	for i in range(0, len(values)):
-		downsampled_cloud[i] = np.mean(point_cloud[sorted_point_indices[value_indices[i]:value_indices[i+1]]], axis=0)
+		downsampled_cloud[i] = np.mean(point_cloud.point_cloud[sorted_point_indices[value_indices[i]:value_indices[i+1]]], axis=0)
+		if downsampled_classes is not None:
+			downsampled_classes[i] = stats.mode(point_cloud.classification[sorted_point_indices[value_indices[i]:value_indices[i+1]]]).mode
 
-	return downsampled_cloud
+	return lidar_data.PointCloud(downsampled_cloud, downsampled_classes)
 
 
 @timebudget
@@ -53,17 +59,19 @@ def remove_vertical_outliers(point_cloud, num_stdev = 2.0):
 
 @timebudget
 def remove_statistical_outliers(point_cloud, num_neighbors=20, num_stdev=2.0):
-	points_kdtree = spatial.KDTree(data=point_cloud)
-
-	query = points_kdtree.query(point_cloud, k=num_neighbors)
+	points_kdtree = spatial.KDTree(data=point_cloud.point_cloud)
+	query = points_kdtree.query(point_cloud.point_cloud, k=num_neighbors)
 
 	mean_neighbor_distance = np.mean(np.asarray(query[0]), axis=1)
-
 	stdev = np.std(mean_neighbor_distance)
 
 	threshold = np.mean(mean_neighbor_distance) + num_stdev * stdev
+	mask = np.nonzero(mean_neighbor_distance < threshold)[0]
 
-	return point_cloud[mean_neighbor_distance < threshold, :]
+	if point_cloud.classification is not None:
+		return lidar_data.PointCloud(point_cloud.point_cloud[mask, :], point_cloud.classification[mask])
+	else:
+		return lidar_data.PointCloud(point_cloud.point_cloud[mask, :])
 
 
 @timebudget

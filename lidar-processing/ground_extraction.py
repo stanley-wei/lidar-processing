@@ -10,6 +10,7 @@ from timebudget import timebudget
 
 import config
 import filters
+import lidar_data
 
 
 @timebudget
@@ -139,7 +140,7 @@ def progressive_morphological_filter(point_cloud, cell_size=1, initial_window=2,
 
 if __name__ == "__main__":
 	las_data = laspy.open(sys.argv[1]).read()
-	points = np.asarray(las_data.xyz)
+	points = lidar_data.PointCloud(np.asarray(las_data.xyz), np.asarray(las_data.classification))
 
 	# Feet to meters
 	# points *= 0.3048
@@ -148,11 +149,11 @@ if __name__ == "__main__":
 	points = filters.remove_statistical_outliers(points)
 
 	# Extract ground surface
-	classifications = progressive_morphological_filter(points)
+	# classifications = progressive_morphological_filter(points.point_cloud)
 
 	# Write to LiDAR file
 	classified_header = laspy.LasHeader(version="1.4", point_format=6)
 	classified_las = laspy.LasData(classified_header)
-	classified_las.xyz = points
-	classified_las.classification = classifications
+	classified_las.xyz = points.point_cloud
+	classified_las.classification = points.classification
 	classified_las.write("classified.laz")

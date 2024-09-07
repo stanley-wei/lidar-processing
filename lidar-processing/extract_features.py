@@ -17,9 +17,11 @@ from tqdm import tqdm
 import config
 import filters
 import ground_extraction
+import lidar_data
 
 
-def retrieve_point_neighborhoods(point_cloud, radius, k, type='spherical'):
+def retrieve_point_neighborhoods(point_cloud, radius, k, type='spherical', 
+								 start=None, end=None):
 	'''
 	type: 'spherical', 'knn', 'cylindrical'
 	'''
@@ -29,31 +31,45 @@ def retrieve_point_neighborhoods(point_cloud, radius, k, type='spherical'):
 
 	if type == 'spherical':
 		points_kdtree = spatial.KDTree(data=point_cloud)
-		query = points_kdtree.query_ball_tree(points_kdtree, r=radius)
-
+		if not start or not end:
+			query = points_kdtree.query_ball_tree(points_kdtree, r=radius)
+		else:
+			search_kdtree = spatial.KDTree(data=point_cloud[start:end])
+			query = points_kdtree.query_ball_tree(search_kdtree, r=radius)
 		return query, None
 
 	elif type == 'cylindrical':
 		points_kdtree = spatial.KDTree(data=point_cloud[:, 0:2])
-		query = points_kdtree.query_ball_tree(points_kdtree, r=radius)
-
+		if not start or not end:
+			query = points_kdtree.query_ball_tree(points_kdtree, r=radius)
+		else:
+			search_kdtree = spatial.KDTree(data=point_cloud[start:end, 0:2])
+			query = points_kdtree.query_ball_tree(search_kdtree, r=radius)
 		return query, None
 
 	elif type == 'knn':
 		points_kdtree = spatial.KDTree(data=point_cloud)
-		query = points_kdtree.query(point_cloud, k=k)
-
+		if not start or not end:
+			query = points_kdtree.query(point_cloud, k=k)
+		else:
+			query = points_kdtree.query(point_cloud[start:end], k=k)
 		return query[1], query[0]
 
 
-def extract_features(point_cloud, query_points, start, end):
+def extract_features(point_cloud, radius, k, type, start, end):
+	query_points, query_distances = retrieve_point_neighborhoods(point_cloud, radius, k, type, 
+																 start, end)
+
 	num_features = 24
 	features = np.zeros((end-start, num_features), dtype=float)
 
 	pca = PCA(n_components=3)
 	pca_2d = PCA(n_components=2)
 	for i in range(start, end):
-		neighbors = point_cloud[query_points[i]]
+		neighbors = point_cloud[query_points[i-start]]
+
+		if neighbors.shape[0] < 3:
+			continue
 
 		elevation = point_cloud[i, 2]
 
@@ -122,12 +138,10 @@ def extract_features(point_cloud, query_points, start, end):
 
 @timebudget
 def compute_features(point_cloud, radius, k, type='spherical'):
-	query_points, query_distances = retrieve_point_neighborhoods(point_cloud, radius, k, type)
-
 	num_threads = 4
 	splits = [int(point_cloud.shape[0] * i / num_threads) for i in range(num_threads + 1)]
 
-	results = Parallel(n_jobs=num_threads)(delayed(extract_features)(point_cloud, query_points, splits[i-1], splits[i]) for i in range(1, len(splits)))
+	results = Parallel(n_jobs=num_threads)(delayed(extract_features)(point_cloud, radius, k, type, splits[i-1], splits[i]) for i in range(1, len(splits)))
 
 	features = np.concatenate(results, axis=0)
 
@@ -178,7 +192,6 @@ def compute_elevation(ground, non_ground, cell_size=2.0):
 
 
 def extract_dataset_features(path, dataset):
-
 	for dataset_file in tqdm(dataset):
 		output_path = dataset_file.split('.')[0] + '.csv'
 
@@ -189,21 +202,18 @@ def extract_dataset_features(path, dataset):
 		points = np.asarray(las_data.xyz)
 		classifications = remap_classes(las_data.classification, config.DALES_CLASSES)
 
-		ground = points[classifications == config.GROUND]
-		non_ground = points[classifications != config.GROUND]
+		points = lidar_data.PointCloud(points, classifications)
+		points = filters.voxel_filter(points, resolution=2.0)
+		points = filters.remove_statistical_outliers(points)
 
-		elevation = compute_elevation(ground, non_ground)
+		ground = points.point_cloud[points.classification == config.GROUND]
+		non_ground = points.point_cloud[points.classification != config.GROUND]
 
 		adjusted_points = np.array(non_ground)
-		adjusted_points[:, 2] = elevation
+		adjusted_points[:, 2] = compute_elevation(ground, non_ground)
 
-		features = compute_features(adjusted_points, k=20, radius=None, type='knn')
-
-		print(features.shape)
-		print(classifications[classifications != config.GROUND].shape)
-
-		features = np.concatenate((features, np.expand_dims(classifications[classifications != config.GROUND], axis=1)), axis=1)
-
+		features = compute_features(adjusted_points, k=None, radius=2.0, type='spherical')
+		features = np.concatenate((features, np.expand_dims(points.classification[points.classification != config.GROUND], axis=1)), axis=1)
 		np.savetxt(f'{output_path}', features, delimiter=',')
 
 
