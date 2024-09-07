@@ -12,8 +12,9 @@ import utils
 
 class PointCloud:
 
-	def __init__(self, point_cloud, bounds = None):
+	def __init__(self, point_cloud, classification=None, bounds=None):
 		self.point_cloud = point_cloud
+		self.classification = classification
 		self._bounds = bounds # Stored as a dictionary; see bounds() function
 
 
