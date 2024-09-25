@@ -94,7 +94,10 @@ def extract_features(point_cloud, radius, k, type, start, end):
 		anisotropy = (pca.explained_variance_[0] - pca.explained_variance_[2]) / pca.explained_variance_[0]
 
 		omnivariance = math.pow(np.prod(pca.explained_variance_), 1.0/3.0)
-		eigentropy = -np.sum(pca.explained_variance_ratio_ * np.log(pca.explained_variance_ratio_))
+		if np.min(pca.explained_variance_ratio_) != 0.0:
+			eigentropy = -np.sum(pca.explained_variance_ratio_ * np.log(pca.explained_variance_ratio_))
+		else:
+			eigentropy = np.finfo(np.float32).max
 
 		verticality = np.arccos(np.dot(pca.components_[2], [0,0,1]) / np.linalg.norm(pca.components_[2]))
 
@@ -108,30 +111,30 @@ def extract_features(point_cloud, radius, k, type, start, end):
 		sum_of_eigenvalues_2d = np.sum(pca_2d.explained_variance_)
 		ratio_of_eigenvalues_2d = pca_2d.explained_variance_ratio_
 
-		features[i-start, 0] = elevation
-		features[i-start, 1] = num_points
-		features[i-start, 2] = neighborhood_radius
-		features[i-start, 3] = max_height_diff
-		features[i-start, 4] = height_std
-		features[i-start, 5] = neighborhood_density
-		features[i-start, 6] = sum_of_eigenvalues
-		features[i-start, 7] = linearity
-		features[i-start, 8] = planarity
-		features[i-start, 9] = sphericity
-		features[i-start, 10] = change_of_curvature
-		features[i-start, 11] = anisotropy
-		features[i-start, 12] = omnivariance
-		features[i-start, 13] = eigentropy
-		features[i-start, 14] = verticality
-		features[i-start, 15] = first_moment
-		features[i-start, 16] = second_moment
-		features[i-start, 17] = first_moment_abs
-		features[i-start, 18] = second_moment_abs
-		features[i-start, 19] = sum_of_eigenvalues_2d
-		features[i-start, 20] = ratio_of_eigenvalues_2d[0]
-		features[i-start, 21] = ratio_of_eigenvalues_2d[1]
-		features[i-start, 22] = radius_2d
-		features[i-start, 23] = density_2d
+		features[i-start] = np.array(elevation,						# 0
+									 num_points,					# 1
+									 neighborhood_radius,			# 2
+									 max_height_diff,				# 3
+									 height_std,					# 4
+									 neighborhood_density,			# 5
+									 sum_of_eigenvalues,			# 6
+									 linearity,						# 7
+									 planarity,						# 8
+									 sphericity,					# 9
+									 change_of_curvature,			# 10
+									 anisotropy,					# 11
+									 omnivariance,					# 12
+									 eigentropy,					# 13
+									 verticality,					# 14
+									 first_moment,					# 15
+									 second_moment,					# 16
+									 first_moment_abs,				# 17
+									 second_moment_abs,				# 18
+									 sum_of_eigenvalues_2d,			# 19
+									 ratio_of_eigenvalues_2d[0],	# 20
+									 ratio_of_eigenvalues_2d[1],	# 21
+									 radius_2d,						# 22
+									 density_2d)					# 23
 
 	return features
 
@@ -203,7 +206,7 @@ def extract_dataset_features(path, dataset):
 		classifications = remap_classes(las_data.classification, config.DALES_CLASSES)
 
 		points = lidar_data.PointCloud(points, classifications)
-		points = filters.voxel_filter(points, resolution=2.0)
+		points = filters.voxel_filter(points, resolution=0.5)
 		points = filters.remove_statistical_outliers(points)
 
 		ground = points.point_cloud[points.classification == config.GROUND]

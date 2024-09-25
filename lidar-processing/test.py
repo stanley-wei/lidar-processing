@@ -9,6 +9,7 @@ from scipy import interpolate, spatial
 from sklearn.decomposition import PCA
 from sklearn.ensemble import RandomForestClassifier
 import sklearn.metrics as metrics
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import LinearSVC, SVC
@@ -23,14 +24,14 @@ import ground_extraction
 import lidar_data
 
 
-def classify_building(point_cloud, clf):
-	points = filters.voxel_filter(point_cloud, resolution=2.0)
+def classify_building(points, clf):
+	points = filters.voxel_filter(points, resolution=2.0)
 	points = filters.remove_statistical_outliers(points)
 
-	classifications = ground_extraction.progressive_morphological_filter(points)
+	# classifications = ground_extraction.progressive_morphological_filter(points)
 
-	ground = points[classifications == config.GROUND]
-	non_ground = points[classifications != config.GROUND]
+	ground = points.point_cloud[points.classification == config.GROUND]
+	non_ground = points.point_cloud[points.classification != config.GROUND]
 
 	elevation = classify_buildings.compute_elevation(ground, non_ground)
 
@@ -44,7 +45,7 @@ def classify_building(point_cloud, clf):
 	classified_header = laspy.LasHeader(version="1.4", point_format=6)
 	classified_las = laspy.LasData(classified_header)
 	classified_las.xyz = np.concatenate((ground, non_ground), axis=0)
-	classified_las.classification = np.concatenate((classifications[classifications == config.GROUND], pred), axis=0)
+	classified_las.classification = np.concatenate((points.classifications[points.classifications == config.GROUND], pred), axis=0)
 	classified_las.write("classified.laz")
 
 
@@ -57,7 +58,7 @@ if __name__ == "__main__":
 
 	train_dataset = os.listdir(TRAIN_PATH)
 	test_dataset = os.listdir(TEST_PATH)
-	extracted_features = glob.glob(os.path.join("./", '*.csv'))
+	extracted_features = glob.glob(os.path.join("./train_data", '*.csv'))
 
 	if "rf.joblib" in os.listdir():
 		clf = joblib.load("rf.joblib")
@@ -71,18 +72,22 @@ if __name__ == "__main__":
 				clf.n_estimators += 10
 				clf.fit(features[:, 0:-1], features[:, -1])
 		else:
-			# clf = RandomForestClassifier(n_estimators=100)
-			clf = make_pipeline(StandardScaler(),
-                    LinearSVC(random_state=0, tol=1e-5))
+			clf = RandomForestClassifier(n_estimators=100)
+			# clf = make_pipeline(StandardScaler(),
+            #         LinearSVC(random_state=0, tol=1e-5))
+			# clf = KNeighborsClassifier()
 			features = np.loadtxt(extracted_features[0], delimiter=',')
-			for i in range(1, len(extracted_features)):
+			print("Loading")
+			for i in tqdm(range(1, len(extracted_features))):
 				features = np.concatenate((
 					features, np.loadtxt(extracted_features[i], delimiter=',')), axis=0)
 			clf.fit(features[:, 0:-1], features[:, -1])
 
-		joblib.dump(clf, "rf.joblib")
+		joblib.dump(clf, "trained_model/model.joblib")
 
 	print("Test")
+	accuracy_scores = []
+	f1_scores = []
 	for file in test_dataset:
 		print(f"\n{file}")
 
@@ -91,7 +96,7 @@ if __name__ == "__main__":
 		classes = extract_features.remap_classes(las_data.classification, config.DALES_CLASSES)
 
 		points = lidar_data.PointCloud(points, classes)
-		points = filters.voxel_filter(points, resolution=2.0)
+		points = filters.voxel_filter(points, resolution=0.5)
 		points = filters.remove_statistical_outliers(points)
 		classes = points.classification
 
@@ -119,3 +124,17 @@ if __name__ == "__main__":
 		print(f"Precision: {precision_score}")
 		print(f"Recall: {recall_score}")
 		# print(f"Importances: {clf.feature_importances_}")
+
+		accuracy_scores.append(accuracy_score)
+		f1_scores.append(f1_score)
+
+	print("Overall Results")
+	print(f"Accuracy mean: {np.mean(accuracy_scores)}")
+	print(f"Accuracy std: {np.std(accuracy_scores)}")
+	print(f"Accuracy min: {np.min(accuracy_scores)}")
+	print(f"Accuracy max: {np.max(accuracy_scores)}")
+	
+	print(f"F1 mean: {np.mean(f1_scores)}")
+	print(f"F1 std: {np.std(f1_scores)}")
+	print(f"F1 min: {np.min(f1_scores)}")
+	print(f"F1 max: {np.max(f1_scores)}")
