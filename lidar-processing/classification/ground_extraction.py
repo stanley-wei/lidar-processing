@@ -1,3 +1,4 @@
+import argparse
 import cv2
 import laspy
 import math
@@ -6,14 +7,13 @@ import pyvista as pv
 from scipy import interpolate, spatial
 from sklearn.decomposition import PCA
 import sys
-from timebudget import timebudget
 
-import config
-import filters
-import lidar_data
+from . import utils
+from ..config import classes
+from ..data import PointCloud
+from ..processing import VoxelFilter, StatisticalOutlierFilter
 
 
-@timebudget
 def progressive_morphological_filter(point_cloud, cell_size=1, initial_window=2, num_steps=8,
 					terrain_slope=1.2, initial_threshold=0.25, max_threshold=2.5):
 	"""
@@ -132,28 +132,43 @@ def progressive_morphological_filter(point_cloud, cell_size=1, initial_window=2,
 	non_ground = index_grid[np.logical_and(keep_cells, flag_nonzeros)]
 
 	classifications = np.zeros(point_cloud.shape[0], dtype=int)
-	classifications[np.concatenate((ground_points, unused_points))] = config.GROUND
-	classifications[np.concatenate((non_ground, nonground_indices))] = config.UNASSIGNED
+	classifications[np.concatenate((ground_points, unused_points))] = classes.GROUND
+	classifications[np.concatenate((non_ground, nonground_indices))] = classes.UNASSIGNED
 
 	return classifications
 
 
 if __name__ == "__main__":
-	las_data = laspy.open(sys.argv[1]).read()
-	points = lidar_data.PointCloud(np.asarray(las_data.xyz), np.asarray(las_data.classification))
+	parser = argparse.ArgumentParser(description="Given a LiDAR .las/.laz file, \
+		extracts ground points and outputs a .las/.laz file with classification field annotated.")
 
-	# Feet to meters
-	# points *= 0.3048
+	parser.add_argument('file',
+		help='Name of .las/.laz file to be classified')
+	parser.add_argument('output', nargs='?', default="classified.laz", 
+		help='Name of annotated .las/.laz file to be output')
+	parser.add_argument('-r', '--resolution', type=float, nargs='?', const=1.0, default=1.0,
+		help='Determines resolution of voxel filter used')
+	parser.add_argument('--in-feet', dest='in_feet', action='store_true',
+		help='Converts the dataset from feet to meters before classifying')
 
-	points = filters.voxel_filter(points, resolution=1.0)
-	points = filters.remove_statistical_outliers(points)
+	args = parser.parse_args();
+
+	las_data = laspy.open(args.file).read()
+	points = PointCloud(np.asarray(las_data.xyz), np.asarray(las_data.classification))
+
+	if args.in_feet:
+		points *= 0.3048 # Feet -> meters
+
+	filters = [VoxelFilter(resolution=args.resolution),
+		   StatisticalOutlierFilter()]
+	points = utils.apply_filters(points, filters)
 
 	# Extract ground surface
-	# classifications = progressive_morphological_filter(points.point_cloud)
+	classifications = progressive_morphological_filter(points.point_cloud)
 
 	# Write to LiDAR file
 	classified_header = laspy.LasHeader(version="1.4", point_format=6)
 	classified_las = laspy.LasData(classified_header)
 	classified_las.xyz = points.point_cloud
 	classified_las.classification = points.classification
-	classified_las.write("classified.laz")
+	classified_las.write(args.output)

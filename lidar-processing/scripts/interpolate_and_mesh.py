@@ -8,8 +8,7 @@ from scipy import ndimage
 import sys
 from tqdm import tqdm
 
-from lidar_data import PointCloud, PointGrid
-import utils
+from ..data import PointCloud, PointGrid
 
 
 def request_mask(point_grid, mask_name, generate_mask):
