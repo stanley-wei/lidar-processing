@@ -140,7 +140,7 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="Given a LiDAR .las/.laz file, \
 		extracts ground points and outputs a .las/.laz file with classification field annotated.")
 
-	parser.add_argument('file',
+	parser.add_argument('path',
 		help='Name of .las/.laz file to be classified')
 	parser.add_argument('output', nargs='?', default="classified.laz", 
 		help='Name of annotated .las/.laz file to be output (Default: "classified.laz")')
@@ -151,7 +151,7 @@ if __name__ == "__main__":
 
 	args = parser.parse_args();
 
-	las_data = laspy.open(args.file).read()
+	las_data = laspy.open(args.path).read()
 	points = PointCloud(np.asarray(las_data.xyz), np.asarray(las_data.classification))
 
 	if args.in_feet:

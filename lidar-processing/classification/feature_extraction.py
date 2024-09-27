@@ -183,11 +183,21 @@ def compute_elevation(ground, non_ground, cell_size=2.0):
 
 
 def extract_dataset_features(dataset_path, output_path):
-	dataset_files = os.listdir(dataset_path)
+	if os.path.isdir(dataset_path):
+		dataset_files = os.listdir(dataset_path)
+	elif os.path.isfile(dataset_path):
+		dataset_files = [dataset_path]
+	else:
+		raise Exception("Dataset path must point to a valid directory or file.")
+
+	if not os.path.isdir(output_path):
+		os.mkdir(output_path)
+
 	for dataset_file in tqdm(dataset_files):
 
-		output_filename = dataset_file.split('.')[0] + '.csv'
-		if output_filename in os.listdir(output_path):
+		output_filename = os.path.basename(dataset_file).split(".")[0] + '.csv'
+		if os.path.isfile(dataset_path) and output_filename in os.listdir(output_path) \
+			or os.path.isdir(dataset_path) and output_filename in os.listdir(output_path):
 			continue
 
 		las_data = laspy.open(os.path.join(dataset_path, dataset_file)).read()
@@ -203,7 +213,8 @@ def extract_dataset_features(dataset_path, output_path):
 		non_ground = points.point_cloud[points.classification != classes.GROUND]
 
 		adjusted_points = np.array(non_ground)
-		adjusted_points[:, 2] = compute_elevation(ground, non_ground)
+		if ground.any():
+			adjusted_points[:, 2] = compute_elevation(ground, non_ground)
 
 		features = compute_features(adjusted_points, k=None, radius=2.0, type='spherical')
 		features = np.concatenate((features, np.expand_dims(points.classification[points.classification != classes.GROUND], axis=1)), axis=1)
@@ -214,8 +225,10 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="Given a directory of LiDAR .las/.laz \
 		files with classified ground points, for each file: \
 		computes a set of per-point neighborhood features.")
-	parser.add_argument('dataset_path', help="Location of input dataset")
-	parser.add_argument('features_path', help="Location to save output extracted features")
+	parser.add_argument('dataset_path', help="Location of input file/dataset")
+	parser.add_argument('features_path', 
+		nargs='?', const="features", default="features",
+		help="Directory to save output extracted features")
 	args = parser.parse_args();
 
 	DATASET_PATH = args.dataset_path

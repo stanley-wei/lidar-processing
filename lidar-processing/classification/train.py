@@ -21,6 +21,7 @@ if __name__ == "__main__":
 	parser.add_argument('dataset_path',
 		help="Location of input training dataset")
 	parser.add_argument('features_path',
+		nargs='?', const="features", default="features",
 		help="Intermediate location to save extracted features")
 	parser.add_argument('--model-path', dest='model_path', 
 		nargs='?', const="model.joblib", default="model.joblib",
@@ -32,6 +33,9 @@ if __name__ == "__main__":
 	DATASET_PATH = args.dataset_path
 	FEATURES_PATH = args.features_path
 	TRAIN_PATH = os.path.join(DATASET_PATH, "train")
+
+	if not os.path.isdir(FEATURES_PATH):
+		os.mkdir(FEATURES_PATH)
 
 	dataset_files = os.listdir(TRAIN_PATH)
 	feature_extraction.extract_dataset_features(TRAIN_PATH, FEATURES_PATH)
