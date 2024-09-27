@@ -60,7 +60,7 @@ if __name__ == "__main__":
 		points = np.asarray(las_data.xyz)
 		classifications = utils.remap_classes(las_data.classification, classes.DALES_CLASSES)
 
-		points = util.apply_filters(PointCloud(points, classifications), filters)
+		points = utils.apply_filters(PointCloud(points, classifications), filters)
 		classifications = points.classification
 
 		# points.classification = ground_extraction.progressive_morphological_filter(points.point_cloud)
@@ -85,7 +85,8 @@ if __name__ == "__main__":
 		print(f"Accuracy: {accuracy_score}")
 		print(f"Precision: {precision_score}")
 		print(f"Recall: {recall_score}")
-		# print(f"Importances: {clf.feature_importances_}")
+		if clf.feature_importances_:
+			print(f"Importances: {clf.feature_importances_}")
 
 		accuracy_scores.append(accuracy_score)
 		f1_scores.append(f1_score)

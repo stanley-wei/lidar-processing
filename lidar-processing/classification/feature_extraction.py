@@ -7,6 +7,7 @@ import numpy as np
 import os
 import pyvista as pv
 from scipy import interpolate, spatial
+from sklearn.decomposition import PCA
 import sys
 from timebudget import timebudget
 from tqdm import tqdm
@@ -109,30 +110,30 @@ def extract_features(point_cloud, radius, k, type, start, end):
 		sum_of_eigenvalues_2d = np.sum(pca_2d.explained_variance_)
 		ratio_of_eigenvalues_2d = pca_2d.explained_variance_ratio_
 
-		features[i-start] = np.array(elevation,						# 0
-									 num_points,					# 1
-									 neighborhood_radius,			# 2
-									 max_height_diff,				# 3
-									 height_std,					# 4
-									 neighborhood_density,			# 5
-									 sum_of_eigenvalues,			# 6
-									 linearity,						# 7
-									 planarity,						# 8
-									 sphericity,					# 9
-									 change_of_curvature,			# 10
-									 anisotropy,					# 11
-									 omnivariance,					# 12
-									 eigentropy,					# 13
-									 verticality,					# 14
-									 first_moment,					# 15
-									 second_moment,					# 16
-									 first_moment_abs,				# 17
-									 second_moment_abs,				# 18
-									 sum_of_eigenvalues_2d,			# 19
-									 ratio_of_eigenvalues_2d[0],	# 20
-									 ratio_of_eigenvalues_2d[1],	# 21
-									 radius_2d,						# 22
-									 density_2d)					# 23
+		features[i-start] = np.array([elevation,						# 0
+									 num_points,						# 1
+									 neighborhood_radius,				# 2
+									 max_height_diff,					# 3
+									 height_std,						# 4
+									 neighborhood_density,				# 5
+									 sum_of_eigenvalues,				# 6
+									 linearity,							# 7
+									 planarity,							# 8
+									 sphericity,						# 9
+									 change_of_curvature,				# 10
+									 anisotropy,						# 11
+									 omnivariance,						# 12
+									 eigentropy,						# 13
+									 verticality,						# 14
+									 first_moment,						# 15
+									 second_moment,						# 16
+									 first_moment_abs,					# 17
+									 second_moment_abs,					# 18
+									 sum_of_eigenvalues_2d,				# 19
+									 ratio_of_eigenvalues_2d[0],		# 20
+									 ratio_of_eigenvalues_2d[1],		# 21
+									 radius_2d,							# 22
+									 density_2d])						# 23
 
 	return features
 
@@ -142,7 +143,6 @@ def compute_features(point_cloud, radius, k, type='spherical'):
 	splits = [int(point_cloud.shape[0] * i / num_threads) for i in range(num_threads + 1)]
 
 	results = Parallel(n_jobs=num_threads)(delayed(extract_features)(point_cloud, radius, k, type, splits[i-1], splits[i]) for i in range(1, len(splits)))
-
 	features = np.concatenate(results, axis=0)
 
 	return features
@@ -192,10 +192,10 @@ def extract_dataset_features(dataset_path, output_path):
 
 		las_data = laspy.open(os.path.join(dataset_path, dataset_file)).read()
 		points = np.asarray(las_data.xyz)
-		classifications = utils.remap_classes(las_data.classification, classes.DALES_classes)
+		classifications = utils.remap_classes(las_data.classification, classes.DALES_CLASSES)
 
 		points = PointCloud(points, classifications)
-		filters = [VoxelFilter(resolution=args.resolution),
+		filters = [VoxelFilter(resolution=0.5),
 			   StatisticalOutlierFilter()]
 		points = utils.apply_filters(points, filters)
 
