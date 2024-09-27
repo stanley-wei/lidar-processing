@@ -1,23 +1,22 @@
+import argparse
 import glob
 from joblib import Parallel, delayed
 import laspy
 import math
-import multiprocessing
 import numpy as np
 import os
 import pyvista as pv
 from scipy import interpolate, spatial
 from sklearn.decomposition import PCA
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.svm import SVC
 import sys
 from timebudget import timebudget
 from tqdm import tqdm
 
-import config
-import filters
-import ground_extraction
-import lidar_data
+from . import ground_extraction
+from . import utils
+from ..config import classes
+from ..data import PointCloud
+from ..processing import VoxelFilter, StatisticalOutlierFilter
 
 
 def retrieve_point_neighborhoods(point_cloud, radius, k, type='spherical', 
@@ -111,53 +110,42 @@ def extract_features(point_cloud, radius, k, type, start, end):
 		sum_of_eigenvalues_2d = np.sum(pca_2d.explained_variance_)
 		ratio_of_eigenvalues_2d = pca_2d.explained_variance_ratio_
 
-		features[i-start] = np.array(elevation,						# 0
-									 num_points,					# 1
-									 neighborhood_radius,			# 2
-									 max_height_diff,				# 3
-									 height_std,					# 4
-									 neighborhood_density,			# 5
-									 sum_of_eigenvalues,			# 6
-									 linearity,						# 7
-									 planarity,						# 8
-									 sphericity,					# 9
-									 change_of_curvature,			# 10
-									 anisotropy,					# 11
-									 omnivariance,					# 12
-									 eigentropy,					# 13
-									 verticality,					# 14
-									 first_moment,					# 15
-									 second_moment,					# 16
-									 first_moment_abs,				# 17
-									 second_moment_abs,				# 18
-									 sum_of_eigenvalues_2d,			# 19
-									 ratio_of_eigenvalues_2d[0],	# 20
-									 ratio_of_eigenvalues_2d[1],	# 21
-									 radius_2d,						# 22
-									 density_2d)					# 23
+		features[i-start] = np.array([elevation,						# 0
+									 num_points,						# 1
+									 neighborhood_radius,				# 2
+									 max_height_diff,					# 3
+									 height_std,						# 4
+									 neighborhood_density,				# 5
+									 sum_of_eigenvalues,				# 6
+									 linearity,							# 7
+									 planarity,							# 8
+									 sphericity,						# 9
+									 change_of_curvature,				# 10
+									 anisotropy,						# 11
+									 omnivariance,						# 12
+									 eigentropy,						# 13
+									 verticality,						# 14
+									 first_moment,						# 15
+									 second_moment,						# 16
+									 first_moment_abs,					# 17
+									 second_moment_abs,					# 18
+									 sum_of_eigenvalues_2d,				# 19
+									 ratio_of_eigenvalues_2d[0],		# 20
+									 ratio_of_eigenvalues_2d[1],		# 21
+									 radius_2d,							# 22
+									 density_2d])						# 23
 
 	return features
 
 
-@timebudget
 def compute_features(point_cloud, radius, k, type='spherical'):
 	num_threads = 4
 	splits = [int(point_cloud.shape[0] * i / num_threads) for i in range(num_threads + 1)]
 
 	results = Parallel(n_jobs=num_threads)(delayed(extract_features)(point_cloud, radius, k, type, splits[i-1], splits[i]) for i in range(1, len(splits)))
-
 	features = np.concatenate(results, axis=0)
 
 	return features
-
-
-def remap_classes(classifications, class_dict):
-	remapped = np.zeros(classifications.shape, dtype=classifications.dtype)
-
-	for key in class_dict.keys():
-		remapped[np.nonzero(classifications == key)] = class_dict[key]
-
-	return remapped
 
 
 def compute_elevation(ground, non_ground, cell_size=2.0):
@@ -194,47 +182,55 @@ def compute_elevation(ground, non_ground, cell_size=2.0):
 	return elevation
 
 
-def extract_dataset_features(path, dataset):
-	for dataset_file in tqdm(dataset):
-		output_path = dataset_file.split('.')[0] + '.csv'
+def extract_dataset_features(dataset_path, output_path):
+	if os.path.isdir(dataset_path):
+		dataset_files = os.listdir(dataset_path)
+	elif os.path.isfile(dataset_path):
+		dataset_files = [dataset_path]
+	else:
+		raise Exception("Dataset path must point to a valid directory or file.")
 
-		if output_path in os.listdir("./"):
+	if not os.path.isdir(output_path):
+		os.mkdir(output_path)
+
+	for dataset_file in tqdm(dataset_files):
+
+		output_filename = os.path.basename(dataset_file).split(".")[0] + '.csv'
+		if os.path.isfile(dataset_path) and output_filename in os.listdir(output_path) \
+			or os.path.isdir(dataset_path) and output_filename in os.listdir(output_path):
 			continue
 
-		las_data = laspy.open(os.path.join(path, dataset_file)).read()
+		las_data = laspy.open(os.path.join(dataset_path, dataset_file)).read()
 		points = np.asarray(las_data.xyz)
-		classifications = remap_classes(las_data.classification, config.DALES_CLASSES)
+		classifications = utils.remap_classes(las_data.classification, classes.DALES_CLASSES)
 
-		points = lidar_data.PointCloud(points, classifications)
-		points = filters.voxel_filter(points, resolution=0.5)
-		points = filters.remove_statistical_outliers(points)
+		points = PointCloud(points, classifications)
+		filters = [VoxelFilter(resolution=0.5),
+			   StatisticalOutlierFilter()]
+		points = utils.apply_filters(points, filters)
 
-		ground = points.point_cloud[points.classification == config.GROUND]
-		non_ground = points.point_cloud[points.classification != config.GROUND]
+		ground = points.point_cloud[points.classification == classes.GROUND]
+		non_ground = points.point_cloud[points.classification != classes.GROUND]
 
 		adjusted_points = np.array(non_ground)
-		adjusted_points[:, 2] = compute_elevation(ground, non_ground)
+		if ground.any():
+			adjusted_points[:, 2] = compute_elevation(ground, non_ground)
 
 		features = compute_features(adjusted_points, k=None, radius=2.0, type='spherical')
-		features = np.concatenate((features, np.expand_dims(points.classification[points.classification != config.GROUND], axis=1)), axis=1)
-		np.savetxt(f'{output_path}', features, delimiter=',')
-
-
-def color_by_classification(point_cloud, classifications):
-	cloud = pv.PolyData(point_cloud)
-
-	cloud['point_color'] = classifications
-
-	pv.plot(cloud, scalars='point_color')
+		features = np.concatenate((features, np.expand_dims(points.classification[points.classification != classes.GROUND], axis=1)), axis=1)
+		np.savetxt(os.path.join(output_path, output_filename), features, delimiter=',')
 
 
 if __name__ == "__main__":
-	DATASET_PATH = sys.argv[1]
+	parser = argparse.ArgumentParser(description="Given a directory of LiDAR .las/.laz \
+		files with classified ground points, for each file: \
+		computes a set of per-point neighborhood features.")
+	parser.add_argument('dataset_path', help="Location of input file/dataset")
+	parser.add_argument('features_path', 
+		nargs='?', const="features", default="features",
+		help="Directory to save output extracted features")
+	args = parser.parse_args();
 
-	TRAIN_PATH = os.path.join(DATASET_PATH, "train")
-	TEST_PATH = os.path.join(DATASET_PATH, "test")
-
-	train_dataset = os.listdir(TRAIN_PATH)
-	test_dataset = os.listdir(TEST_PATH)
-
-	extract_dataset_features(TRAIN_PATH, train_dataset)
+	DATASET_PATH = args.dataset_path
+	FEATURES_PATH = args.features_path
+	extract_dataset_features(DATASET_PATH, FEATURES_PATH)

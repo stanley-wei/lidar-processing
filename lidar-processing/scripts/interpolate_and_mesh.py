@@ -8,8 +8,7 @@ from scipy import ndimage
 import sys
 from tqdm import tqdm
 
-from lidar_data import PointCloud, PointGrid
-import utils
+from ..data import PointCloud, PointGrid
 
 
 def request_mask(point_grid, mask_name, generate_mask):
@@ -110,8 +109,8 @@ if __name__ == "__main__":
 
         building_points = PointCloud.combine(building_points, extra_points)
 
-    ground_array = ground_points.to_point_grid(resolution, ground_points.bounds);
-    pruned_array = building_points.to_point_grid(resolution, ground_points.bounds);
+    ground_array = PointGrid.from_point_cloud(ground_points, resolution, ground_points.bounds);
+    pruned_array = PointGrid.from_point_cloud(building_points, resolution, ground_points.bounds);
 
 
     # Interpolate ground, non-ground arrays & combine
@@ -140,7 +139,7 @@ if __name__ == "__main__":
         tree_points = PointCloud(las_xyz[np.where(las_classifications == 5)])
         z_mean, z_std = tree_points.remove_outliers(num_stdev=4)
 
-        tree_array = tree_points.to_point_grid(resolution, ground_points.bounds);
+        tree_array = PointGrid.from_point_cloud(tree_points, resolution, ground_points.bounds);
         tree_cloud = tree_array.to_point_cloud(invert_xy=True, ignore_zeros=True)
 
         tree_mask = request_mask(tree_array, args.tree_mask, args.generate_tree_mask)
