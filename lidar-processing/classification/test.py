@@ -39,14 +39,11 @@ def classify_building(points, clf, filters):
 
 
 if __name__ == "__main__":
-	parser = argparse.ArgumentParser(description="Given a directory of classified \
-		LiDAR .las/.laz files and a classifier, tests the performance of the classifier.")
-    parser.add_argument('dataset-path', dest='dataset_path')
-    parser.add_argument('model-path', dest='model_path', 
-    	nargs='?', const="model.joblib", default="model.joblib")
-    parser.add_argument('clf',
-    	help='Classifiers: "rf", "svc", "knn"')
-    args = parser.parse_args();
+	parser = argparse.ArgumentParser(description="Given a test dataset of classified \
+		LiDAR .las/.laz files and a classifier, evaluates the performance of the classifier over the dataset.")
+	parser.add_argument('dataset_path', help="Location of input test dataset")
+	parser.add_argument('model_path', help="File name of trained point classifier")
+	args = parser.parse_args();
 
 	DATASET_PATH = args.dataset_path
 	TEST_PATH = os.path.join(DATASET_PATH, "test")

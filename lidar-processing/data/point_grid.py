@@ -6,6 +6,7 @@ from scipy import interpolate, ndimage
 import time
 from tqdm import tqdm
 
+from . import point_cloud
 from . import utils
 
 
@@ -138,7 +139,7 @@ class PointGrid:
 		return file_name;
 
 
-	def from_point_cloud(point_cloud, resolution, bounds = None):
+	def from_point_cloud(cloud, resolution, bounds = None):
 		'''
 		Converts PointCloud object to PointGrid object, using resolution 
 		parameter to determine fineness of discretization. (Represents
@@ -148,15 +149,15 @@ class PointGrid:
 		to be max of points' Z coordinates.
 		'''
 		if not bounds:
-			bounds = point_cloud.bounds
+			bounds = cloud.bounds
 
 		discretized_grid = np.zeros([int(abs(bounds['max_y'] - bounds['min_y']) / resolution) + 2, 
 			int(abs(bounds['max_x'] - bounds['min_x']) / resolution) + 2])
 
-		for i in range(point_cloud.point_cloud.shape[0]):
-			x = round((point_cloud.point_cloud[i][0] - bounds['min_x']) / resolution)
-			y = round((point_cloud.point_cloud[i][1] - bounds['min_y']) / resolution)
-			z = point_cloud.point_cloud[i][2]
+		for i in range(cloud.point_cloud.shape[0]):
+			x = round((cloud.point_cloud[i][0] - bounds['min_x']) / resolution)
+			y = round((cloud.point_cloud[i][1] - bounds['min_y']) / resolution)
+			z = cloud.point_cloud[i][2]
 			if(z > discretized_grid[y][x]):
 				discretized_grid[y][x] = z;
 
@@ -170,7 +171,7 @@ class PointGrid:
 			- invert_xy: Flips X, Y coordinates of final output
 			- ignore_zeros: Do not output points for grid cells with value 0
 		'''
-		point_cloud = np.zeros((self.point_grid.shape[0] * self.point_grid.shape[1], 3), dtype = int);
+		cloud = np.zeros((self.point_grid.shape[0] * self.point_grid.shape[1], 3), dtype = int);
 		index = 0
 		
 		i_multi = self.bounds['min_y'] if invert_xy else self.bounds['min_x']
@@ -178,12 +179,12 @@ class PointGrid:
 			j_multi = self.bounds['min_x'] if invert_xy else self.bounds['min_y']
 			for j in range(self.point_grid.shape[1]):
 				if not math.isnan(self.point_grid[i, j]) and not (ignore_zeros and self.point_grid[i, j]==0):
-					point_cloud[index] = [j_multi, i_multi, 
+					cloud[index] = [j_multi, i_multi, 
 						self.point_grid[i, j]] if invert_xy else [i_multi, j_multi, self.point_grid[i, j]]
 				j_multi += self.resolution
 				index += 1
 			i_multi += self.resolution
 
-		point_cloud = point_cloud[point_cloud.any(axis=1)]
+		cloud = cloud[cloud.any(axis=1)]
 
-		return PointCloud(point_cloud, bounds=self.bounds);
+		return point_cloud.PointCloud(cloud, bounds=self.bounds);

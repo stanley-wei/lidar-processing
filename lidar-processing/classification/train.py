@@ -16,15 +16,18 @@ from ..data import PointCloud
 
 
 if __name__ == "__main__":
-	parser = argparse.ArgumentParser(description="Given a directory of classified \
+	parser = argparse.ArgumentParser(description="Given a train dataset of classified \
 		LiDAR .las/.laz files, trains a classifier.")
-    parser.add_argument('dataset-path', dest='dataset_path')
-    parser.add_argument('features-path', dest='features_path')
-    parser.add_argument('model-path', dest='model_path', 
-    	nargs='?', const="model.joblib", default="model.joblib")
-    parser.add_argument('clf',
-    	help='Classifiers: "rf", "svc", "knn"')
-    args = parser.parse_args();
+	parser.add_argument('dataset_path',
+		help="Location of input training dataset")
+	parser.add_argument('features_path',
+		help="Intermediate location to save extracted features")
+	parser.add_argument('--model-path', dest='model_path', 
+		nargs='?', const="model.joblib", default="model.joblib",
+		help="File name for output trained model (Default: \"model.joblib\")")
+	parser.add_argument('--clf', nargs='?', const='rf', default='rf',
+		help='Classifiers: "rf", "svc", "knn" (Default: "rf")')
+	args = parser.parse_args();
 
 	DATASET_PATH = args.dataset_path
 	FEATURES_PATH = args.features_path
@@ -44,7 +47,7 @@ if __name__ == "__main__":
 		clf = RandomForestClassifier(n_estimators=100)
 	elif args.clf == "linear-svc":
 		clf = make_pipeline(StandardScaler(),
-                LinearSVC(random_state=0, tol=1e-5))
+				LinearSVC(random_state=0, tol=1e-5))
 	elif args.clf == "knn":
 		clf = KNeighborsClassifier()
 

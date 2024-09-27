@@ -3,9 +3,7 @@ import cv2
 import laspy
 import math
 import numpy as np
-import pyvista as pv
 from scipy import interpolate, spatial
-from sklearn.decomposition import PCA
 import sys
 
 from . import utils
@@ -15,7 +13,7 @@ from ..processing import VoxelFilter, StatisticalOutlierFilter
 
 
 def progressive_morphological_filter(point_cloud, cell_size=1, initial_window=2, num_steps=8,
-					terrain_slope=1.2, initial_threshold=0.25, max_threshold=2.5):
+					terrain_slope=1.2, initial_threshold=0.25, max_threshold=5.0):
 	"""
 	Implements a Progressive Morphological Filter for ground extraction (Zhang et al., 2003).
 		- See: https://ieeexplore.ieee.org/document/1202973
@@ -45,7 +43,7 @@ def progressive_morphological_filter(point_cloud, cell_size=1, initial_window=2,
 		non-ground points. 
 		Higher values correspond to more aggressive filtering.
 
-	max_threshold : float (default: 2.5)
+	max_threshold : float (default: 5.0)
 		Specifies the maximum possible elevation threshold across all steps for separating
 		non-ground points. 
 		Higher values correspond to more aggressive filtering.
@@ -145,11 +143,11 @@ if __name__ == "__main__":
 	parser.add_argument('file',
 		help='Name of .las/.laz file to be classified')
 	parser.add_argument('output', nargs='?', default="classified.laz", 
-		help='Name of annotated .las/.laz file to be output')
+		help='Name of annotated .las/.laz file to be output (Default: "classified.laz")')
 	parser.add_argument('-r', '--resolution', type=float, nargs='?', const=1.0, default=1.0,
-		help='Determines resolution of voxel filter used')
+		help='Determines resolution of voxel filter used (Default: 1.0)')
 	parser.add_argument('--in-feet', dest='in_feet', action='store_true',
-		help='Converts the dataset from feet to meters before classifying')
+		help='Convert dataset from feet to meters before classifying')
 
 	args = parser.parse_args();
 
@@ -157,7 +155,7 @@ if __name__ == "__main__":
 	points = PointCloud(np.asarray(las_data.xyz), np.asarray(las_data.classification))
 
 	if args.in_feet:
-		points *= 0.3048 # Feet -> meters
+		points.point_cloud *= 0.3048 # Feet -> meters
 
 	filters = [VoxelFilter(resolution=args.resolution),
 		   StatisticalOutlierFilter()]
@@ -170,5 +168,5 @@ if __name__ == "__main__":
 	classified_header = laspy.LasHeader(version="1.4", point_format=6)
 	classified_las = laspy.LasData(classified_header)
 	classified_las.xyz = points.point_cloud
-	classified_las.classification = points.classification
+	classified_las.classification = classifications
 	classified_las.write(args.output)

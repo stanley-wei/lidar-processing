@@ -1,4 +1,5 @@
 import numpy as np
+import pyvista as pv
 
 def apply_filters(point_cloud, filters):
 	for filter in filters:

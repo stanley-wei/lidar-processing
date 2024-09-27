@@ -1,8 +1,8 @@
+import argparse
 import glob
 from joblib import Parallel, delayed
 import laspy
 import math
-import multiprocessing
 import numpy as np
 import os
 import pyvista as pv
@@ -214,9 +214,9 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="Given a directory of LiDAR .las/.laz \
 		files with classified ground points, for each file: \
 		computes a set of per-point neighborhood features.")
-    parser.add_argument('dataset-path', dest='dataset_path')
-    parser.add_argument('features-path', dest='features_path')
-    args = parser.parse_args();
+	parser.add_argument('dataset_path', help="Location of input dataset")
+	parser.add_argument('features_path', help="Location to save output extracted features")
+	args = parser.parse_args();
 
 	DATASET_PATH = args.dataset_path
 	FEATURES_PATH = args.features_path
