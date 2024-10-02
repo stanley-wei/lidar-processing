@@ -23,4 +23,11 @@ class classes:
 		8: BUILDING
 	}
 
+	MY_CLASSES = {
+		UNASSIGNED: 0,
+		GROUND: 1,
+		HIGH_VEGETATION: 2,
+		BUILDING: 3
+	}
+
 	# ground(1), vegetation(2), cars(3), trucks(4), power lines(5), fences(6), poles(7) and buildings(8)

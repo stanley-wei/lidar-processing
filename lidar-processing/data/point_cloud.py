@@ -18,7 +18,7 @@ class PointCloud:
 
 
 	def __getitem__(self, index):
-		return self.point_cloud[i]
+		return self.point_cloud[index]
 
 
 	@property

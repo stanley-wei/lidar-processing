@@ -1,4 +1,4 @@
-_pycache_/*
+*/_pycache_/*
 env/*
 
 *.cfg
